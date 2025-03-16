@@ -1,0 +1,71 @@
+site_name: NATS Tower
+site_description: A simple manager application for multi-tenancy in NATS
+repo_url: https://github.com/nats-tower/nats-tower
+docs_dir: docs
+
+nav:
+  - Home: 'index.md'
+
+theme:
+  name: material
+  font: false
+  palette:
+    # Palette toggle for dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.footer
+    - navigation.top
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+
+plugins:
+  - material-plausible
+
+extra:
+  homepage: /
+  generator: false
+  analytics:
+    provider: plausible
+    domain:  'nats-tower.github.io'
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/emoticon-happy-outline
+          name: This page was helpful
+          data: good
+          note: >-
+            Thanks for your feedback!
+
+        - icon: material/emoticon-sad-outline
+          name: This page could be improved
+          data: bad
+          note: >-
+            Thanks for your feedback!
+    src:  'https://analytics.schwanke.it/js/script.outbound-links.js'
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+      toc_depth: 4
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.details
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
