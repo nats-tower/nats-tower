@@ -11,9 +11,6 @@ env:
 
 jobs:
   docker:
-    strategy:
-      matrix:
-        node-version: [16.x]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

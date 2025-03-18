@@ -18,17 +18,10 @@ RUN CGO_ENABLED=0 go build \
     -o /app ./cmd/
     
 # STAGE 2: get a simple sh
-FROM busybox:1.35.0-uclibc as busybox
+FROM busybox:1.35.0-uclibc AS busybox
 
 # STAGE 4: build the container to run​
 FROM gcr.io/distroless/static AS final
-
-ARG ARG_VERSION=latest
-ENV VERSION=$ARG_VERSION
-ARG ARG_BUILDNUMBER=none
-ENV BUILDNUMBER=$ARG_BUILDNUMBER
-ARG ARG_BUILDURL=none
-ENV BUILDURL=$ARG_BUILDURL
 
 # copy compiled app​
 COPY --from=build /app /app
