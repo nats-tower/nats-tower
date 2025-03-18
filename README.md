@@ -44,7 +44,7 @@ Each application can get its own account and you can manage the resources, strea
 
 To get started with NATS Tower, you can either run it as a standalone application or deploy it to your container runtime of choice. You can find detailed instructions in the [documentation](nats-tower.github.io/nats-tower/).
 
-`docker run -p 8090:8090 ghcr.io/nats-tower/nats-tower:latest`
+`docker run -p 8090:8090 ghcr.io/nats-tower/nats-tower:main`
 
 Next, open your browser and navigate to [http://localhost:8090](http://localhost:8090) to access the NATS Tower interface.
 
