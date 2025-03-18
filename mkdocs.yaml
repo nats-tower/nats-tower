@@ -18,6 +18,7 @@ nav:
 
 theme:
   name: material
+  custom_dir: docs/overrides
   font: false
   palette:
     # Palette toggle for dark mode
