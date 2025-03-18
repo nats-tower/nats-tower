@@ -42,4 +42,5 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile
+          push: true
           # include ,linux/arm64 for arm builds but github is soooo slow
