@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "cwd": "${workspaceFolder}",
+  "tasks": [
+    {
+      "label": "run server",
+      "command": "templ",
+      "args": [
+        "generate",
+        "--watch",
+        "--cmd",
+        "go run cmd/main.go serve --http 0.0.0.0:8099"
+      ],
+      "group": "build",
+      "type": "shell",
+      "options": {
+        "env": {
+        }
+      }
+    }
+  ]
+}

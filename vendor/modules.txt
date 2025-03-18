@@ -1,0 +1,254 @@
+# github.com/a-h/templ v0.3.833
+## explicit; go 1.23
+github.com/a-h/templ
+github.com/a-h/templ/runtime
+github.com/a-h/templ/safehtml
+# github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
+## explicit; go 1.13
+github.com/asaskevich/govalidator
+# github.com/disintegration/imaging v1.6.2
+## explicit
+github.com/disintegration/imaging
+# github.com/domodwyer/mailyak/v3 v3.6.2
+## explicit; go 1.12
+github.com/domodwyer/mailyak/v3
+# github.com/dustin/go-humanize v1.0.1
+## explicit; go 1.16
+github.com/dustin/go-humanize
+# github.com/fatih/color v1.18.0
+## explicit; go 1.17
+github.com/fatih/color
+# github.com/gabriel-vasile/mimetype v1.4.8
+## explicit; go 1.20
+github.com/gabriel-vasile/mimetype
+github.com/gabriel-vasile/mimetype/internal/charset
+github.com/gabriel-vasile/mimetype/internal/json
+github.com/gabriel-vasile/mimetype/internal/magic
+# github.com/ganigeorgiev/fexpr v0.4.1
+## explicit; go 1.16
+github.com/ganigeorgiev/fexpr
+# github.com/go-ozzo/ozzo-validation/v4 v4.3.0
+## explicit; go 1.13
+github.com/go-ozzo/ozzo-validation/v4
+github.com/go-ozzo/ozzo-validation/v4/is
+# github.com/go-sql-driver/mysql v1.8.1
+## explicit; go 1.18
+# github.com/golang-jwt/jwt/v5 v5.2.1
+## explicit; go 1.18
+github.com/golang-jwt/jwt/v5
+# github.com/google/uuid v1.6.0
+## explicit
+github.com/google/uuid
+# github.com/inconshreveable/mousetrap v1.1.0
+## explicit; go 1.18
+github.com/inconshreveable/mousetrap
+# github.com/klauspost/compress v1.17.7
+## explicit; go 1.20
+github.com/klauspost/compress/flate
+github.com/klauspost/compress/internal/race
+github.com/klauspost/compress/s2
+# github.com/mattn/go-colorable v0.1.14
+## explicit; go 1.18
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.20
+## explicit; go 1.15
+github.com/mattn/go-isatty
+# github.com/minio/highwayhash v1.0.2
+## explicit; go 1.15
+github.com/minio/highwayhash
+# github.com/nats-io/jsm.go v0.1.1
+## explicit; go 1.21
+github.com/nats-io/jsm.go/natscontext
+# github.com/nats-io/jwt/v2 v2.5.5
+## explicit; go 1.18
+github.com/nats-io/jwt/v2
+# github.com/nats-io/nats-server/v2 v2.10.12
+## explicit; go 1.20
+github.com/nats-io/nats-server/v2/conf
+github.com/nats-io/nats-server/v2/internal/fastrand
+github.com/nats-io/nats-server/v2/internal/ldap
+github.com/nats-io/nats-server/v2/logger
+github.com/nats-io/nats-server/v2/server
+github.com/nats-io/nats-server/v2/server/avl
+github.com/nats-io/nats-server/v2/server/certidp
+github.com/nats-io/nats-server/v2/server/certstore
+github.com/nats-io/nats-server/v2/server/pse
+github.com/nats-io/nats-server/v2/server/stree
+github.com/nats-io/nats-server/v2/server/sysmem
+# github.com/nats-io/nats.go v1.33.1
+## explicit; go 1.20
+github.com/nats-io/nats.go
+github.com/nats-io/nats.go/encoders/builtin
+github.com/nats-io/nats.go/internal/parser
+github.com/nats-io/nats.go/util
+# github.com/nats-io/nkeys v0.4.7
+## explicit; go 1.20
+github.com/nats-io/nkeys
+# github.com/nats-io/nuid v1.0.1
+## explicit
+github.com/nats-io/nuid
+# github.com/ncruces/go-strftime v0.1.9
+## explicit; go 1.17
+github.com/ncruces/go-strftime
+# github.com/pocketbase/dbx v1.11.0
+## explicit; go 1.13
+github.com/pocketbase/dbx
+# github.com/pocketbase/pocketbase v0.26.1
+## explicit; go 1.23.0
+github.com/pocketbase/pocketbase
+github.com/pocketbase/pocketbase/apis
+github.com/pocketbase/pocketbase/cmd
+github.com/pocketbase/pocketbase/core
+github.com/pocketbase/pocketbase/core/validators
+github.com/pocketbase/pocketbase/forms
+github.com/pocketbase/pocketbase/mails
+github.com/pocketbase/pocketbase/mails/templates
+github.com/pocketbase/pocketbase/migrations
+github.com/pocketbase/pocketbase/tools/archive
+github.com/pocketbase/pocketbase/tools/auth
+github.com/pocketbase/pocketbase/tools/cron
+github.com/pocketbase/pocketbase/tools/dbutils
+github.com/pocketbase/pocketbase/tools/filesystem
+github.com/pocketbase/pocketbase/tools/filesystem/blob
+github.com/pocketbase/pocketbase/tools/filesystem/internal/fileblob
+github.com/pocketbase/pocketbase/tools/filesystem/internal/s3blob
+github.com/pocketbase/pocketbase/tools/filesystem/internal/s3blob/s3
+github.com/pocketbase/pocketbase/tools/hook
+github.com/pocketbase/pocketbase/tools/inflector
+github.com/pocketbase/pocketbase/tools/list
+github.com/pocketbase/pocketbase/tools/logger
+github.com/pocketbase/pocketbase/tools/mailer
+github.com/pocketbase/pocketbase/tools/osutils
+github.com/pocketbase/pocketbase/tools/picker
+github.com/pocketbase/pocketbase/tools/router
+github.com/pocketbase/pocketbase/tools/routine
+github.com/pocketbase/pocketbase/tools/search
+github.com/pocketbase/pocketbase/tools/security
+github.com/pocketbase/pocketbase/tools/store
+github.com/pocketbase/pocketbase/tools/subscriptions
+github.com/pocketbase/pocketbase/tools/tokenizer
+github.com/pocketbase/pocketbase/tools/types
+github.com/pocketbase/pocketbase/ui
+# github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
+## explicit; go 1.12
+github.com/remyoudompheng/bigfft
+# github.com/spf13/cast v1.7.1
+## explicit; go 1.19
+github.com/spf13/cast
+# github.com/spf13/cobra v1.9.1
+## explicit; go 1.15
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.6
+## explicit; go 1.12
+github.com/spf13/pflag
+# github.com/stretchr/testify v1.8.1
+## explicit; go 1.13
+# golang.org/x/crypto v0.36.0
+## explicit; go 1.23.0
+golang.org/x/crypto/acme
+golang.org/x/crypto/acme/autocert
+golang.org/x/crypto/bcrypt
+golang.org/x/crypto/blake2b
+golang.org/x/crypto/blowfish
+golang.org/x/crypto/chacha20
+golang.org/x/crypto/chacha20poly1305
+golang.org/x/crypto/cryptobyte
+golang.org/x/crypto/cryptobyte/asn1
+golang.org/x/crypto/curve25519
+golang.org/x/crypto/ed25519
+golang.org/x/crypto/internal/alias
+golang.org/x/crypto/internal/poly1305
+golang.org/x/crypto/nacl/box
+golang.org/x/crypto/nacl/secretbox
+golang.org/x/crypto/ocsp
+golang.org/x/crypto/salsa20/salsa
+# golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
+## explicit; go 1.23.0
+golang.org/x/exp/constraints
+# golang.org/x/image v0.25.0
+## explicit; go 1.23.0
+golang.org/x/image/bmp
+golang.org/x/image/ccitt
+golang.org/x/image/tiff
+golang.org/x/image/tiff/lzw
+# golang.org/x/net v0.37.0
+## explicit; go 1.23.0
+golang.org/x/net/html
+golang.org/x/net/html/atom
+golang.org/x/net/idna
+golang.org/x/net/internal/socks
+golang.org/x/net/proxy
+# golang.org/x/oauth2 v0.28.0
+## explicit; go 1.23.0
+golang.org/x/oauth2
+golang.org/x/oauth2/endpoints
+golang.org/x/oauth2/facebook
+golang.org/x/oauth2/github
+golang.org/x/oauth2/internal
+golang.org/x/oauth2/kakao
+golang.org/x/oauth2/microsoft
+golang.org/x/oauth2/spotify
+golang.org/x/oauth2/twitch
+golang.org/x/oauth2/vk
+golang.org/x/oauth2/yandex
+# golang.org/x/sync v0.12.0
+## explicit; go 1.23.0
+golang.org/x/sync/errgroup
+golang.org/x/sync/semaphore
+golang.org/x/sync/singleflight
+# golang.org/x/sys v0.31.0
+## explicit; go 1.23.0
+golang.org/x/sys/cpu
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+golang.org/x/sys/windows/registry
+golang.org/x/sys/windows/svc
+golang.org/x/sys/windows/svc/eventlog
+golang.org/x/sys/windows/svc/mgr
+# golang.org/x/text v0.23.0
+## explicit; go 1.23.0
+golang.org/x/text/secure/bidirule
+golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+# golang.org/x/time v0.8.0
+## explicit; go 1.18
+golang.org/x/time/rate
+# modernc.org/libc v1.61.13
+## explicit; go 1.21
+modernc.org/libc
+modernc.org/libc/errno
+modernc.org/libc/fcntl
+modernc.org/libc/fts
+modernc.org/libc/grp
+modernc.org/libc/honnef.co/go/netdb
+modernc.org/libc/langinfo
+modernc.org/libc/limits
+modernc.org/libc/netdb
+modernc.org/libc/netinet/in
+modernc.org/libc/poll
+modernc.org/libc/pthread
+modernc.org/libc/pwd
+modernc.org/libc/signal
+modernc.org/libc/stdio
+modernc.org/libc/stdlib
+modernc.org/libc/sys/socket
+modernc.org/libc/sys/stat
+modernc.org/libc/sys/types
+modernc.org/libc/termios
+modernc.org/libc/time
+modernc.org/libc/unistd
+modernc.org/libc/utime
+modernc.org/libc/uuid
+modernc.org/libc/uuid/uuid
+modernc.org/libc/wctype
+# modernc.org/mathutil v1.7.1
+## explicit; go 1.21
+modernc.org/mathutil
+# modernc.org/memory v1.8.2
+## explicit; go 1.21
+modernc.org/memory
+# modernc.org/sqlite v1.36.1
+## explicit; go 1.21
+modernc.org/sqlite
+modernc.org/sqlite/lib

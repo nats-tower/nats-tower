@@ -1,0 +1,323 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-tower/nats-tower/application"
+	"github.com/nats-tower/nats-tower/interfaces/web/utils"
+	"github.com/nats-tower/nats-tower/interfaces/web/views/helpers"
+	"github.com/nats-tower/nats-tower/interfaces/web/views/layouts"
+	"github.com/pocketbase/pocketbase/core"
+)
+
+type Error struct {
+	Error error
+}
+
+type InstallationModel struct {
+	RequestEvent *core.RequestEvent
+	Installation *application.OperatorAuth
+	Error        *Error
+	Accounts     []*application.AccountAuth
+	ServerInfos  []*server.ServerStatsMsg
+}
+
+func (m *InstallationModel) TotalUsedCores() float64 {
+	var total float64
+	for _, server := range m.ServerInfos {
+		total += server.Stats.CPU
+	}
+	return total
+}
+
+func (m *InstallationModel) TotalCores() int {
+	var total int
+	for _, server := range m.ServerInfos {
+		total += server.Stats.Cores
+	}
+	return total
+}
+
+func (m *InstallationModel) TotalUsedBytes() uint64 {
+	var total uint64
+	for _, server := range m.ServerInfos {
+		total += uint64(server.Stats.Mem)
+	}
+	return total
+}
+
+func (m *InstallationModel) TotalConnections() int {
+	var total int
+	for _, server := range m.ServerInfos {
+		total += server.Stats.Connections
+	}
+	return total
+}
+
+func (m *InstallationModel) TotalUsedJetstreamStorage() uint64 {
+	var total uint64
+	for _, server := range m.ServerInfos {
+		total += server.Stats.JetStream.Stats.Store
+	}
+	return total
+}
+
+func (m *InstallationModel) TotalJetstreamStorage() uint64 {
+	var total uint64
+	for _, server := range m.ServerInfos {
+		total += uint64(server.Stats.JetStream.Config.MaxStore)
+	}
+	return total
+}
+
+templ Installation(m InstallationModel) {
+	<div class="page-wrapper">
+		<div class="container-xl">
+			<div class="page-header">
+				<div class="row align-items-center">
+					<div class="col">
+						<h2 class="page-title">
+							Dashboard
+						</h2>
+						<div class="page-pretitle">
+							Overview
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="page-body">
+			<div class="container-xl">
+				<div class="row row-deck row-cards">
+					<div class="col-sm-12 col-lg-12">
+						<div class="card">
+							<div class="card-body">
+								<div class="row">
+									<div class="col">
+										<div class="subheader">
+											URL
+										</div>
+										<div class="h3 m-0" id="installation-url">
+											{ m.Installation.URL }
+										</div>
+									</div>
+									<div class="col-auto">
+										@helpers.CopyButton(helpers.CopyButtonModel{
+											ElementID: "installation-url",
+										})
+									</div>
+									<div class="col-auto">
+										<a
+											class="btn btn-6 w-100 btn-icon"
+											data-bs-toggle="modal"
+											data-bs-target="#installation-settings-modal"
+											hx-get={ fmt.Sprintf("/ui/installations/%s/settings", m.Installation.ID) }
+											hx-target="#installation-settings-modal"
+											hx-push-url="false"
+											hx-trigger="click consume"
+										>
+											<!-- Download SVG icon from http://tabler.io/icons/icon/settings -->
+											<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-key"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M16.555 3.843l3.602 3.602a2.877 2.877 0 0 1 0 4.069l-2.643 2.643a2.877 2.877 0 0 1 -4.069 0l-.301 -.301l-6.558 6.558a2 2 0 0 1 -1.239 .578l-.175 .008h-1.172a1 1 0 0 1 -.993 -.883l-.007 -.117v-1.172a2 2 0 0 1 .467 -1.284l.119 -.13l.414 -.414h2v-2h2v-2l2.144 -2.144l-.301 -.301a2.877 2.877 0 0 1 0 -4.069l2.643 -2.643a2.877 2.877 0 0 1 4.069 0z"></path><path d="M15 9h.01"></path></svg>
+										</a>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="col-sm-6 col-lg-3">
+						<div class="card">
+							<div class="card-body">
+								<div class="subheader">
+									Used Total Cores
+								</div>
+								<div class="h3 m-0">
+									{ fmt.Sprintf("%.2f / %d", m.TotalUsedCores(), m.TotalCores()) }
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="col-sm-6 col-lg-3">
+						<div class="card">
+							<div class="card-body">
+								<div class="subheader">
+									Used Total Memory
+								</div>
+								<div class="h3 m-0">
+									{ utils.ToStringSigBytesPerKB(m.TotalUsedBytes(), 3, 1000) }
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="col-sm-6 col-lg-3">
+						<div class="card">
+							<div class="card-body">
+								<div class="subheader">
+									Total Connections
+								</div>
+								<div class="h3 m-0">
+									{ fmt.Sprintf("%d", m.TotalConnections()) }
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="col-sm-6 col-lg-3">
+						<div class="card">
+							<div class="card-body">
+								<div class="subheader">
+									Used Total Jetstream Storage
+								</div>
+								<div class="h3 m-0">
+									{ utils.ToStringSigBytesPerKB(m.TotalUsedJetstreamStorage(), 3, 1000) + " / " + utils.ToStringSigBytesPerKB(m.TotalJetstreamStorage(), 3, 1000) }
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="page-pretitle mt-3">
+					Servers
+				</div>
+				<div class="row row-deck row-cards mt-2">
+					for _, server := range m.ServerInfos {
+						<div class="col-sm-6 col-lg-3">
+							<div class="card">
+								<div class="card-header">
+									<h3 class="card-title text-truncate">{ server.Server.Name }</h3>
+								</div>
+								<div class="card-body">
+									<div class="datagrid">
+										<div class="datagrid-item">
+											<div class="datagrid-title">
+												Version
+											</div>
+											<div class="datagrid-content">
+												{ server.Server.Version }
+											</div>
+										</div>
+										<div class="datagrid-item">
+											<div class="datagrid-title">
+												Used Cores
+											</div>
+											<div class="datagrid-content">
+												{ fmt.Sprintf("%.2f / %d", server.Stats.CPU,server.Stats.Cores) }
+											</div>
+										</div>
+										<div class="datagrid-item">
+											<div class="datagrid-title">
+												Memory
+											</div>
+											<div class="datagrid-content">
+												{ utils.ToStringSigBytesPerKB(uint64(server.Stats.Mem), 3, 1000) }
+											</div>
+										</div>
+										<div class="datagrid-item">
+											<div class="datagrid-title">
+												Connections
+											</div>
+											<div class="datagrid-content">
+												{ fmt.Sprintf("%d",server.Stats.Connections) }
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					}
+					if m.Error != nil {
+						<div class="col-sm-12 col-lg-12">
+							<div class="alert alert-danger">
+								{ m.Error.Error.Error() }
+							</div>
+						</div>
+					}
+				</div>
+				<div id="installation-settings-modal" class="modal modal-blur fade" tabindex="-1" aria-hidden="true" style="display: none">
+					<div class="modal-dialog modal-lg" role="document">
+						<div class="modal-content"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	if !utils.RequestsFullPage(m.RequestEvent) {
+		@layouts.Navigation(layouts.NavigationModel{
+			CurrentLocation: "/ui/installations/" + m.Installation.ID,
+			InstallationID:  m.Installation.ID,
+			Swap:            true,
+		})
+	}
+}
+
+type InstallationSettingsModalModel struct {
+	RequestEvent *core.RequestEvent
+	Installation *application.OperatorAuth
+	SimpleConfig string
+}
+
+templ InstallationSettingsModal(m InstallationSettingsModalModel) {
+	<div class="modal-dialog modal-lg" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Installation settings for { m.Installation.Description }</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div class="row row-deck row-cards">
+					<div class="col-sm-12 col-lg-12">
+						<div class="card">
+							<div class="card-body">
+								<div class="row">
+									<div class="col">
+										<div class="subheader">
+											URL
+										</div>
+										<div class="h3 m-0" id="modal-installation-url">
+											{ m.Installation.URL }
+										</div>
+									</div>
+									<div class="col-auto">
+										@helpers.CopyButton(helpers.CopyButtonModel{
+											ElementID: "modal-installation-url",
+										})
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="col-sm-12 col-lg-12">
+					<div class="card">
+						<div class="card-body">
+							<div class="row">
+								<div class="col">
+									<div class="subheader">
+										Simple config
+									</div>
+									<div>
+										Use these settings to start a new NATS server. E.g. <code>nats-server -c nats-server.conf</code>
+									</div>
+									<pre class="h3 m-0 text-white mt-4" id="simple-config">
+										{ m.SimpleConfig }
+									</pre>
+								</div>
+								<div class="col-auto">
+									@helpers.CopyButton(helpers.CopyButtonModel{
+										ElementID: "simple-config",
+									})
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a
+						href="#"
+						class="btn btn-primary btn-5 ms-auto"
+						data-bs-dismiss="modal"
+					>
+						Close
+					</a>
+				</div>
+			</div>
+		</div>
+	</div>
+}

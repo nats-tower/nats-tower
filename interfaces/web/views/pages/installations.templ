@@ -1,0 +1,181 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/nats-tower/nats-tower/application"
+	"github.com/nats-tower/nats-tower/interfaces/web/utils"
+	"github.com/nats-tower/nats-tower/interfaces/web/views/layouts"
+	"github.com/pocketbase/pocketbase/core"
+)
+
+type InstallationsModel struct {
+	RequestEvent  *core.RequestEvent
+	Installations []*application.OperatorAuth
+}
+
+templ Installations(m InstallationsModel) {
+	<div class="container container-tight py-4">
+		<div class="card card-md">
+			<div class="card-header">
+				<div class="row row-cards w-full">
+					<div class="col-auto me-auto">
+						<h3 class="card-title">Select NATS Installation</h3>
+					</div>
+					<div class="col-auto">
+						<a
+							class="btn btn-6 btn-primary w-100 btn-icon"
+							href="#"
+							data-bs-toggle="modal"
+							data-bs-target="#add-installation-modal"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-category-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 4h6v6h-6zm10 0h6v6h-6zm-10 10h6v6h-6zm10 3h6m-3 -3v6"></path></svg>
+						</a>
+					</div>
+				</div>
+			</div>
+			<div class="list-group list-group-flush list-group-hoverable" style="max-height: 50%; overflow: auto;">
+				for _, installation := range m.Installations {
+					<div
+						class="list-group-item cursor-pointer"
+						hx-post={ fmt.Sprintf("/ui/installations/%s", installation.ID) }
+						hx-push-url="true"
+						hx-target="#content"
+					>
+						<div class="row align-items-center">
+							<div class="col text-truncate">
+								<div class="text-reset d-block">{ installation.Description }</div>
+								<div class="d-block text-secondary text-truncate mt-n1">{ installation.URL }</div>
+							</div>
+							<div class="col-auto">
+								<a
+									class="btn btn-6 w-100 btn-icon btn-danger"
+									data-bs-toggle="modal"
+									data-bs-target="#delete-installation-modal"
+									hx-get={ fmt.Sprintf("/ui/installations/%s/delete", installation.ID) }
+									hx-target="#delete-installation-modal"
+									hx-push-url="false"
+									hx-trigger="click consume"
+								>
+									<!-- Download SVG icon from http://tabler.io/icons/icon/settings -->
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-trash"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 7l16 0"></path><path d="M10 11l0 6"></path><path d="M14 11l0 6"></path><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"></path><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"></path></svg>
+								</a>
+							</div>
+						</div>
+					</div>
+				}
+				if len(m.Installations) == 0 {
+					<div class="list-group-item">
+						<div class="row align-items-center">
+							<div class="col text-truncate">
+								<div class="text-reset d-block">No installations found</div>
+							</div>
+						</div>
+					</div>
+				}
+			</div>
+			<div id="delete-installation-modal" class="modal modal-blur fade" tabindex="-1" aria-hidden="true" style="display: none">
+				<div class="modal-dialog modal-lg" role="document">
+					<div class="modal-content"></div>
+				</div>
+			</div>
+			<div id="add-installation-modal" class="modal modal-blur fade" tabindex="-1" aria-hidden="true" style="display: none">
+				@CreateInstallationModal(CreateInstallationModalModel{
+					RequestEvent: m.RequestEvent,
+				})
+			</div>
+		</div>
+	</div>
+	if !utils.RequestsFullPage(m.RequestEvent) {
+		@layouts.Navigation(layouts.NavigationModel{
+			CurrentLocation: "/ui/installations",
+			Swap:            true,
+			Hide:            true,
+		})
+	}
+}
+
+type DeleteInstallationModalModel struct {
+	RequestEvent *core.RequestEvent
+	Installation *application.OperatorAuth
+}
+
+templ DeleteInstallationModal(m DeleteInstallationModalModel) {
+	<div class="modal-dialog modal-lg" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Delete installation { m.Installation.Description }</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<p>Are you sure you want to delete the installation { m.Installation.Description }?</p>
+			</div>
+			<div class="modal-footer">
+				<a href="#" class="btn btn-link link-secondary btn-3" data-bs-dismiss="modal">
+					Cancel
+				</a>
+				<a
+					href="#"
+					class="btn btn-primary btn-5 ms-auto"
+					data-bs-dismiss="modal"
+					hx-delete={ fmt.Sprintf("/ui/installations/%s", m.Installation.ID) }
+					hx-target="#content"
+				>
+					<!-- Download SVG icon from http://tabler.io/icons/icon/plus -->
+					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-trash"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 7l16 0"></path><path d="M10 11l0 6"></path><path d="M14 11l0 6"></path><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"></path><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"></path></svg>
+					Delete installation
+				</a>
+			</div>
+		</div>
+	</div>
+}
+
+type CreateInstallationModalModel struct {
+	RequestEvent *core.RequestEvent
+}
+
+templ CreateInstallationModal(m CreateInstallationModalModel) {
+	<div class="modal-dialog modal-lg" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Create installation</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<form
+					hx-post="/ui/installations"
+					hx-target="#content"
+				>
+					<div class="mb-3">
+						<label class="form-label">URLs</label>
+						<input
+							type="text"
+							class="form-control"
+							name="url"
+							required
+						/>
+					</div>
+					<div class="mb-3">
+						<label class="form-label">Description</label>
+						<input
+							type="text"
+							class="form-control"
+							name="description"
+						/>
+					</div>
+					<div class="modal-footer">
+						<a href="#" class="btn btn-link link-secondary btn-3" data-bs-dismiss="modal">
+							Cancel
+						</a>
+						<button
+							type="submit"
+							class="btn btn-primary btn-5 ms-auto"
+							data-bs-dismiss="modal"
+						>
+							Create installation
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+}

@@ -1,0 +1,299 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-tower/nats-tower/application"
+	"github.com/nats-tower/nats-tower/interfaces/web/utils"
+	"github.com/nats-tower/nats-tower/interfaces/web/views/layouts"
+	"github.com/pocketbase/pocketbase/core"
+)
+
+type AccountsModel struct {
+	RequestEvent    *core.RequestEvent
+	Installation    *application.OperatorAuth
+	Accounts        []*application.AccountAuth
+	SelectedAccount *AccountModel
+}
+
+type AccountModel struct {
+	RequestEvent  *core.RequestEvent
+	Installation  *application.OperatorAuth
+	Account       *application.AccountAuth
+	Users         []*application.UserAuth
+	AccountDetail *server.AccountDetail
+}
+
+func detectUnlimitedQuota(quota uint64) string {
+	if quota > 1000*1000*1000*1000*1000 { // > PB
+		return "∞"
+	}
+	return utils.ToStringSigBytesPerKB(quota, 3, 1000)
+}
+
+templ Account(m AccountModel) {
+	<div>
+		<h2 class="page-title">
+			Account stats for '{ m.Account.Name }'
+		</h2>
+		if m.AccountDetail == nil {
+			<div class="page-pretitle">
+				Jetstream not enabled on account
+			</div>
+		}
+	</div>
+	<div class="row row-deck row-cards mt-0">
+		if m.AccountDetail != nil {
+			<div class="col-sm-6 col-lg-3 mt-2">
+				<div class="card">
+					<div class="card-body">
+						<div class="subheader">
+							Used Storage
+						</div>
+						<div class="h3 m-0">
+							{ fmt.Sprintf("%s / %s", utils.ToStringSigBytesPerKB(m.AccountDetail.Store, 3, 1000), detectUnlimitedQuota(m.AccountDetail.ReservedStore)) }
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+		if m.AccountDetail != nil {
+			<div
+				class="col-sm-6 col-lg-3 mt-2 cursor-pointer"
+				hx-get={ fmt.Sprintf("/ui/installations/%s/accounts/%s/streams", m.Installation.ID, m.Account.ID) }
+				hx-target="#content"
+				hx-push-url="true"
+			>
+				<div class="card">
+					<div class="card-body">
+						<div class="subheader">
+							<div class="row">
+								<div class="col"># of Streams</div>
+								<div class="col-auto">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-external-link"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6"></path><path d="M11 13l9 -9"></path><path d="M15 4h5v5"></path></svg>
+								</div>
+							</div>
+						</div>
+						<div class="h3 m-0" hx-ext="sse" sse-connect={ fmt.Sprintf("/ui/events?sources=stream_count&installation_id=%s&account_id=%s", m.Installation.ID, m.Account.ID) } hx-target="#number_of_streams">
+							<span id="number_of_streams" sse-swap="stream_count">
+								@Loading()
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+		<div
+			class="col-sm-6 col-lg-3 mt-2 cursor-pointer"
+			hx-get={ fmt.Sprintf("/ui/installations/%s/accounts/%s/users", m.Installation.ID, m.Account.ID) }
+			hx-target="#content"
+			hx-push-url="true"
+		>
+			<div class="card">
+				<div class="card-body">
+					<div class="subheader">
+						<div class="row">
+							<div class="col"># of Users</div>
+							<div class="col-auto">
+								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-external-link"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6"></path><path d="M11 13l9 -9"></path><path d="M15 4h5v5"></path></svg>
+							</div>
+						</div>
+					</div>
+					<div class="h3 m-0">
+						{ fmt.Sprintf("%d", len(m.Users)) }
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ Accounts(m AccountsModel) {
+	<div class="page-wrapper">
+		<div class="container-xl">
+			<div class="page-header">
+				<div class="row row-cards">
+					<div class="col">
+						<div class="row row-cards">
+							<div class="col">
+								<h2 class="page-title">
+									Accounts
+								</h2>
+								<div class="page-pretitle">
+									Manage access to '{ m.Installation.Description }'
+								</div>
+							</div>
+							<div class="col-auto">
+								<a
+									class="btn btn-6 btn-primary w-100 btn-icon"
+									href="#"
+									data-bs-toggle="modal"
+									data-bs-target="#add-account-modal"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-users-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M5 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"></path><path d="M3 21v-2a4 4 0 0 1 4 -4h4c.96 0 1.84 .338 2.53 .901"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path><path d="M16 19h6"></path><path d="M19 16v6"></path></svg>
+								</a>
+							</div>
+						</div>
+						<div class="card mt-2">
+							<div class="list-group list-group-flush">
+								for _, account := range m.Accounts {
+									<button
+										if m.SelectedAccount != nil && account.ID == m.SelectedAccount.Account.ID {
+											class="list-group-item list-group-item-action active"
+										} else {
+											class="list-group-item list-group-item-action"
+										}
+										hx-get={ fmt.Sprintf("/ui/installations/%s/accounts/%s", m.Installation.ID, account.ID) }
+										hx-push-url="true"
+										hx-target="#content"
+									>
+										<div class="row align-items-center">
+											<div class="col text-truncate">
+												<a href="#" class="text-reset d-block">{ account.Name }</a>
+												if account.Description == "" {
+													<div class="d-block text-secondary text-truncate mt-n1">
+														no description
+													</div>
+												} else {
+													<div class="d-block text-secondary text-truncate mt-n1">
+														{ account.Description }
+													</div>
+												}
+											</div>
+											if account.Name != "SYS" {
+												<div class="col-auto">
+													<a
+														class="btn btn-6 w-100 btn-icon btn-danger"
+														data-bs-toggle="modal"
+														data-bs-target="#delete-account-modal"
+														hx-get={ fmt.Sprintf("/ui/installations/%s/accounts/%s/delete", m.Installation.ID, account.ID) }
+														hx-target="#delete-account-modal"
+														hx-push-url="false"
+														hx-trigger="click consume"
+													>
+														<!-- Download SVG icon from http://tabler.io/icons/icon/settings -->
+														<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-trash"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 7l16 0"></path><path d="M10 11l0 6"></path><path d="M14 11l0 6"></path><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"></path><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"></path></svg>
+													</a>
+												</div>
+											}
+										</div>
+									</button>
+								}
+							</div>
+						</div>
+					</div>
+					<div class="col" id="details">
+						if m.SelectedAccount != nil {
+							@Account(*m.SelectedAccount)
+						}
+					</div>
+					<div id="delete-account-modal" class="modal modal-blur fade" tabindex="-1" aria-hidden="true" style="display: none">
+						<div class="modal-dialog modal-lg" role="document">
+							<div class="modal-content"></div>
+						</div>
+					</div>
+					<div id="add-account-modal" class="modal modal-blur fade" tabindex="-1" aria-hidden="true" style="display: none">
+						@CreateAccountModal(CreateAccountModalModel{
+							RequestEvent: m.RequestEvent,
+							Installation: m.Installation,
+						})
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	if !utils.RequestsFullPage(m.RequestEvent) {
+		@layouts.Navigation(layouts.NavigationModel{
+			CurrentLocation: "/ui/installations/" + m.Installation.ID + "/accounts",
+			InstallationID:  m.Installation.ID,
+			Swap:            true,
+		})
+	}
+}
+
+type DeleteAccountModalModel struct {
+	RequestEvent *core.RequestEvent
+	Installation *application.OperatorAuth
+	Account      *application.AccountAuth
+}
+
+templ DeleteAccountModal(m DeleteAccountModalModel) {
+	<div class="modal-dialog modal-lg" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Delete account { m.Account.Name }</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<p>Are you sure you want to delete the account { m.Account.Name }?</p>
+			</div>
+			<div class="modal-footer">
+				<a href="#" class="btn btn-link link-secondary btn-3" data-bs-dismiss="modal">
+					Cancel
+				</a>
+				<a
+					href="#"
+					class="btn btn-primary btn-5 ms-auto"
+					data-bs-dismiss="modal"
+					hx-delete={ fmt.Sprintf("/ui/installations/%s/accounts/%s", m.Installation.ID, m.Account.ID) }
+					hx-target="#content"
+				>
+					<!-- Download SVG icon from http://tabler.io/icons/icon/plus -->
+					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-trash"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 7l16 0"></path><path d="M10 11l0 6"></path><path d="M14 11l0 6"></path><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"></path><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"></path></svg>
+					Delete account
+				</a>
+			</div>
+		</div>
+	</div>
+}
+
+type CreateAccountModalModel struct {
+	RequestEvent *core.RequestEvent
+	Installation *application.OperatorAuth
+}
+
+templ CreateAccountModal(m CreateAccountModalModel) {
+	<div class="modal-dialog modal-lg" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Create account</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<form
+					hx-post={ fmt.Sprintf("/ui/installations/%s/accounts", m.Installation.ID) }
+					hx-target="#content"
+				>
+					<div class="mb-3">
+						<label class="form-label">Name</label>
+						<input
+							type="text"
+							class="form-control"
+							name="name"
+							required
+						/>
+					</div>
+					<div class="mb-3">
+						<label class="form-label">Description</label>
+						<input
+							type="text"
+							class="form-control"
+							name="description"
+						/>
+					</div>
+					<div class="modal-footer">
+						<a href="#" class="btn btn-link link-secondary btn-3" data-bs-dismiss="modal">
+							Cancel
+						</a>
+						<button
+							type="submit"
+							class="btn btn-primary btn-5 ms-auto"
+						>
+							Create account
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+}

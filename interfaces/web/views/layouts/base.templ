@@ -1,0 +1,269 @@
+package layouts
+
+import (
+	"fmt"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/nats-tower/nats-tower/interfaces/web/utils"
+	"github.com/nats-tower/nats-tower/natsauth"
+	"strings"
+)
+
+type BaseModel struct {
+	Title           string
+	Description     string
+	NoNavigation    bool
+	RequestEvent    *core.RequestEvent
+	NavigationModel NavigationModel
+}
+
+type NavigationModel struct {
+	CurrentLocation string
+	InstallationID  string
+	AccountID       string
+	Swap            bool
+	Hide            bool
+}
+
+func (m *NavigationModel) GetNavClasses(location string) string {
+	nonActiveClasses := "nav-item pointer"
+	activeClasses := "nav-item pointer active"
+
+	if strings.Contains(m.CurrentLocation, "accounts") {
+		if location == "accounts" {
+			return activeClasses
+		}
+		return nonActiveClasses
+	} else {
+		if location == "accounts" {
+			return nonActiveClasses
+		}
+	}
+
+	return activeClasses
+}
+
+templ Navigation(m NavigationModel) {
+	<header
+		if m.Hide {
+			class="d-none"
+		} else {
+			class="navbar navbar-expand-md d-print-none"
+		}
+		id="navbar"
+		if m.Swap {
+			hx-swap-oob="true"
+		}
+	>
+		<div class="container-xl">
+			<ul class="navbar-nav">
+				<li
+					class={ m.GetNavClasses("installations") }
+				>
+					<button
+						class="nav-link"
+						aria-current="page"
+						hx-get={ fmt.Sprintf("/ui/installations/%s", m.InstallationID) }
+						hx-push-url="true"
+						hx-target="#content"
+					>
+						<span class="nav-link-icon">
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-layout-dashboard"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M5 4h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1"></path><path d="M5 16h4a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1"></path><path d="M15 12h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1"></path><path d="M15 4h4a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1"></path></svg>
+						</span>
+						<span class="nav-link-title">Dashboard</span>
+					</button>
+				</li>
+				<li
+					class={ m.GetNavClasses("accounts") }
+				>
+					<button
+						class="nav-link"
+						aria-current="page"
+						hx-get={ fmt.Sprintf("/ui/installations/%s/accounts", m.InstallationID) }
+						hx-push-url="true"
+						hx-target="#content"
+					>
+						<span class="nav-link-icon">
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-users-group"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M10 13a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"></path><path d="M8 21v-1a2 2 0 0 1 2 -2h4a2 2 0 0 1 2 2v1"></path><path d="M15 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"></path><path d="M17 10h2a2 2 0 0 1 2 2v1"></path><path d="M5 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"></path><path d="M3 13v-1a2 2 0 0 1 2 -2h2"></path></svg>
+						</span>
+						<span class="nav-link-title">Accounts</span>
+					</button>
+				</li>
+			</ul>
+		</div>
+	</header>
+}
+
+templ Header(m BaseModel) {
+	<header class="navbar navbar-expand-sm navbar-light d-print-none">
+		<div class="container-xl">
+			<h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
+				<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-building-broadcast-tower"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path><path d="M16.616 13.924a5 5 0 1 0 -9.23 0"></path><path d="M20.307 15.469a9 9 0 1 0 -16.615 0"></path><path d="M9 21l3 -9l3 9"></path><path d="M10 19h4"></path></svg>
+				<a href="#">
+					NATS Tower
+				</a>
+			</h1>
+			<div class="navbar-nav flex-row ms-auto order-md-last">
+				if m.RequestEvent.Auth != nil {
+					<div class="nav-item dropdown">
+						<a href="#" class="nav-link d-flex lh-1 text-reset p-0" data-bs-toggle="dropdown" aria-label="Open user menu">
+							<div class="d-none d-xl-block ps-2">
+								<div>{ m.RequestEvent.Auth.Email() }</div>
+								if MustGetInstallationDescription(m.RequestEvent) != "" {
+									<div class="mt-1 small text-secondary">{ MustGetInstallationDescription(m.RequestEvent) }</div>
+								}
+							</div>
+						</a>
+						<div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
+							<button
+								hx-get="/ui/installations"
+								hx-target="#content"
+								hx-push-url="true"
+								class="dropdown-item"
+							>Switch NATS installation</button>
+							<button
+								hx-post="/logout"
+								hx-target="#content"
+								class="dropdown-item"
+							>Logout</button>
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+	</header>
+}
+
+const (
+	defaultTitle = "Default title"
+)
+
+templ Base(m BaseModel) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<title>{ getTitle(m.Title) }</title>
+			<meta charset="UTF-8" hx-preserve="true"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0" hx-preserve="true"/>
+			@descriptionMeta(m.Description)
+			<script src="https://unpkg.com/htmx.org@2.0.4" hx-preserve="true"></script>
+			<script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" hx-preserve="true"></script>
+			<script src="https://unpkg.com/htmx-ext-head-support@2.0.1/head-support.js" hx-preserve="true" defer></script>
+			<script src="https://cdn.jsdelivr.net/npm/toastify-js" hx-preserve="true" defer></script>
+			<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js" hx-preserve="true"></script>
+			<script hx-preserve="true">
+				if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+					document.documentElement.classList.add('dark')
+				} else {
+					document.documentElement.classList.remove('dark')
+				}
+
+				function toggleTheme() {
+					let theme = localStorage.theme === 'dark' ? 'light' : 'dark'
+					if (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+						theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark'
+					}
+					
+					localStorage.theme = theme
+					document.documentElement.classList.toggle('dark', theme === 'dark')
+				}
+
+				function isServerError(request) {
+					return request.status >= 400
+				}
+
+				function handleServerError(event) {
+					if (isServerError(event.detail.xhr)) {
+						event.detail.shouldSwap = true
+						event.detail.isError = false
+					}
+				}
+
+				function copyTextToClipboard(id) {
+					let s = document.getElementById(id).innerHTML;
+					navigator.clipboard.writeText(s);
+					document.getElementById(id).innerHTML='Copied';
+					setTimeout(()=>{document.getElementById(id).innerHTML=s}, 1000);
+				}
+
+				function errorToast(message) {
+					Toastify({
+						text: message,
+						duration: 5000,
+						newWindow: true,
+						close: true,
+						gravity: 'top',
+						position: 'right',
+						backgroundColor: 'red',
+						stopOnFocus: true,
+					}).showToast()
+				}
+			</script>
+			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css" hx-preserve="true"/>
+			<link href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" rel="stylesheet" hx-preserve="true"/>
+		</head>
+		<body class="antialiased min-h-screen flex flex-col" hx-ext="head-support" style="height: 100%;">
+			<div
+				id="page"
+				class="page"
+				hx-on:htmx:before-swap="handleServerError(event)"
+				hx-on:htmx:send-error="errorToast('A network error occurred')"
+				hx-request={ fmt.Sprintf(`{"timeout":5000}`) }
+				style="max-height: 100%;"
+			>
+				@Header(m)
+				if !m.NoNavigation {
+					@Navigation(m.NavigationModel)
+				}
+				<div
+					id="content"
+					style="flex: 1; overflow-y: auto;"
+				>
+					{ children... }
+				</div>
+			</div>
+		</body>
+	</html>
+}
+
+templ withBase(component templ.Component, m BaseModel, fullPage bool) {
+	if fullPage {
+		@Base(m) {
+			@component
+		}
+	} else {
+		<head hx-head="merge">
+			<title>{ getTitle(m.Title) }</title>
+			@descriptionMeta(m.Description)
+		</head>
+		@component
+	}
+}
+
+templ descriptionMeta(description string) {
+	if description != "" {
+		<meta name="description" content={ description }/>
+	}
+}
+
+func getTitle(title string) string {
+	if title == "" {
+		return defaultTitle
+	}
+	return title
+}
+
+func WithBase(component templ.Component, m BaseModel) templ.Component {
+	return withBase(component, m, utils.RequestsFullPage(m.RequestEvent))
+}
+
+func MustGetInstallationDescription(e *core.RequestEvent) string {
+	record, err := e.App.FindRecordById("nats_auth_operators", e.Request.PathValue("installation_id"))
+	if err != nil {
+		return ""
+	}
+	installation, err := natsauth.GetOperatorFromRecord(record)
+	if err != nil {
+		return ""
+	}
+	return installation.Description
+}
