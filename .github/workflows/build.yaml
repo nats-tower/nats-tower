@@ -43,4 +43,6 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           # include ,linux/arm64 for arm builds but github is soooo slow
