@@ -36,4 +36,4 @@ COPY --from=busybox /bin/sh /bin/sh
 
 WORKDIR /
 
-ENTRYPOINT ["/app"]
+ENTRYPOINT ["/app", "serve", "--http 0.0.0.0:8090"]
