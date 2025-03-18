@@ -27,6 +27,7 @@ go.work.sum
 *.result
 *.creds
 
-pb_data
-jwt
-jetstream
+/pb_data
+/cmd/pb_data
+/jwt
+/jetstream
