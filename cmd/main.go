@@ -10,7 +10,9 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 
+	"github.com/nats-tower/nats-tower/interfaces/restapi"
 	"github.com/nats-tower/nats-tower/interfaces/store"
+	"github.com/nats-tower/nats-tower/interfaces/teams"
 	"github.com/nats-tower/nats-tower/interfaces/web/routes"
 	"github.com/nats-tower/nats-tower/natsauth"
 	"github.com/nats-tower/nats-tower/utils/env"
@@ -116,6 +118,21 @@ func main() {
 			}
 		}
 
+		teamsModule, err := teams.CreateTeamsModule(ctx, logger.With(slog.String("module", "TeamsModule")), teams.TeamsModuleConfig{
+			App:                 e.App,
+			UsersCollectionName: "users",
+			MicrosoftAuth: teams.MicrosoftAuth{
+				ClientID:    env.GetStringEnv(ctx, logger, "MICROSOFT_CLIENT_ID", ""),
+				TenantID:    env.GetStringEnv(ctx, logger, "MICROSOFT_TENANT_ID", ""),
+				Secret:      env.GetStringEnv(ctx, logger, "MICROSOFT_SECRET", ""),
+				GroupFilter: env.GetStringEnv(ctx, logger, "MICROSOFT_GROUP_FILTER", ""),
+			},
+		})
+		if err != nil {
+			logger.ErrorContext(ctx, "Could not CreateTeamsModule", slog.String("error", err.Error()))
+			return err
+		}
+
 		bootstrapURL := env.GetStringEnv(ctx, logger, "BOOTSTRAP_URL", "")
 		var bootstrapURLs []string
 		if bootstrapURL != "" {
@@ -125,18 +142,29 @@ func main() {
 		natsauthModule, err := natsauth.CreateNATSAuthModule(ctx,
 			logger.With(slog.String("module", "NATSAuthModule")),
 			natsauth.NATSAuthModuleConfig{
-				App:           e.App,
-				BootstrapURLs: bootstrapURLs,
-				APIToken:      os.Getenv("API_TOKEN"),
+				App:             e.App,
+				BootstrapURLs:   bootstrapURLs,
+				APIToken:        os.Getenv("API_TOKEN"),
+				TeamsCollection: teamsModule.TeamsCollection,
 			})
 		if err != nil {
 			logger.ErrorContext(ctx, "Could not CreateNATSAuthModule", slog.String("error", err.Error()))
 			return err
 		}
 
+		// Register the API routes
+		err = restapi.RegisterAPIRoutes(ctx,
+			logger.With(slog.String("module", "RestAPI")),
+			e,
+			natsauthModule)
+		if err != nil {
+			logger.ErrorContext(ctx, "Could not RegisterAPIRoutes", slog.String("error", err.Error()))
+			return err
+		}
+
 		// Register the HTML routes
 		err = routes.RegisterHTMLRoutes(ctx,
-			logger.With(slog.String("module", "NATSAuthModule")),
+			logger.With(slog.String("module", "HTMLModule")),
 			e,
 			natsauthModule)
 		if err != nil {

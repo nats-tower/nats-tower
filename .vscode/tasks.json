@@ -13,10 +13,47 @@
       ],
       "group": "build",
       "type": "shell",
+      "isBackground": true,
       "options": {
-        "env": {
-        }
+        "env": {}
       }
+    },
+    {
+      "label": "run nats-server",
+      "command": "nats-server",
+      "args": [
+        "-c",
+        "nats-server.conf"
+      ],
+      "group": "build",
+      "type": "shell",
+      "isBackground": true,
+      "options": {
+        "env": {}
+      }
+    },
+    {
+      "label": "run frontend",
+      "command": "pnpm",
+      "args": [
+        "dev"
+      ],
+      "group": "build",
+      "type": "shell",
+      "isBackground": true,
+      "options": {
+        "cwd": "${workspaceFolder}/frontend",
+        "env": {}
+      }
+    },
+    {
+      "label": "run dev environment",
+      "dependsOn": [
+        "run server",
+        "run nats-server",
+        "run frontend"
+      ],
+      "problemMatcher": []
     }
   ]
 }

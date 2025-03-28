@@ -2,22 +2,35 @@ package natsauth
 
 import (
 	"context"
+	"fmt"
 
 	jwt "github.com/nats-io/jwt/v2"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func (m *NATSAuthModule) getAccountLimits(_ context.Context, dao core.App, accRec *core.Record) (*jwt.OperatorLimits, error) {
+func (m *NATSAuthModule) getAccountLimits(_ context.Context,
+	dao core.App,
+	operatorID string,
+	accRec *core.Record) (*jwt.OperatorLimits, error) {
 
 	limitID := accRec.GetString("limits")
 
 	// check if we have a limit record
 	if limitID != "" {
-		accountLimitRecord, err := dao.FindRecordById("nats_auth_limits", limitID)
+		accountLimitRecords, err := dao.FindAllRecords("nats_auth_limits", dbx.HashExp{
+			"id":       limitID,
+			"operator": operatorID,
+		})
 		if err != nil {
 			return nil, err
 		}
+
+		if len(accountLimitRecords) == 0 {
+			return nil, fmt.Errorf("limit record not found")
+		}
+
+		accountLimitRecord := accountLimitRecords[0]
 
 		// transform to jwt.OperatorLimits
 		limits := &jwt.OperatorLimits{
@@ -50,8 +63,9 @@ func (m *NATSAuthModule) getAccountLimits(_ context.Context, dao core.App, accRe
 	// check if we have a default limit record
 	defaultAccountLimitRecord, err := dao.FindAllRecords("nats_auth_limits",
 		dbx.HashExp{
-			"default": true,
-			"type":    "account",
+			"default":  true,
+			"type":     "account",
+			"operator": operatorID,
 		})
 	if err != nil {
 		return nil, err

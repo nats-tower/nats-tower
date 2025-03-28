@@ -18,19 +18,21 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 		apiRule = fmt.Sprintf("@request.auth.id != '' || @request.headers.x_token = '%s'", m.cfg.APIToken)
 	}
 
-	limitCollection, err := initNATSAuthLimitsCollection(m.ctx,
-		app,
-		m.logger,
-		apiRule)
-	if err != nil {
-		return err
-	}
-
 	operatorCollection, err := initNATSAuthOperatorsCollection(m.ctx,
 		app,
 		m.logger,
 		apiRule,
+		m.cfg.TeamsCollection,
 		m.cfg.InitialOperatorURLs)
+	if err != nil {
+		return err
+	}
+
+	limitCollection, err := initNATSAuthLimitsCollection(m.ctx,
+		app,
+		m.logger,
+		apiRule,
+		operatorCollection)
 	if err != nil {
 		return err
 	}
@@ -38,6 +40,7 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 		app,
 		m.logger,
 		apiRule,
+		m.cfg.TeamsCollection,
 		operatorCollection,
 		limitCollection,
 		m.cfg.InitialOperatorURLs,
@@ -58,6 +61,7 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 	m.NATSOperatorCollection = operatorCollection
 	m.NATSAccountCollection = accountCollection
 	m.NATSUserCollection = userCollection
+	m.NATSLimitsCollection = limitCollection
 
 	return nil
 }
@@ -65,6 +69,7 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 func initNATSAuthOperatorsCollection(ctx context.Context, app core.App,
 	logger *slog.Logger,
 	rule string,
+	teamsCollection *core.Collection,
 	initialOperatorURLs string) (*core.Collection, error) {
 
 	collection, err := app.FindCollectionByNameOrId("nats_auth_operators")
@@ -76,11 +81,11 @@ func initNATSAuthOperatorsCollection(ctx context.Context, app core.App,
 		return nil, err
 	}
 
-	collection.ListRule = types.Pointer(rule)
-	collection.ViewRule = types.Pointer(rule)
-	collection.CreateRule = types.Pointer(rule)
-	collection.UpdateRule = types.Pointer(rule)
-	collection.DeleteRule = types.Pointer(rule)
+	collection.ListRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
+	collection.ViewRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
+	collection.CreateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
+	collection.UpdateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
+	collection.DeleteRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
 	collection.Indexes = types.JSONArray[string]{
 		"create unique index nats_operators_unique_url on keys (url)",
 		"create unique index nats_operators_unique_public_key on keys (public_key)",
@@ -122,6 +127,18 @@ func initNATSAuthOperatorsCollection(ctx context.Context, app core.App,
 		Name:     "sign_seed",
 		Required: false,
 	})
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "sign_seed",
+		Required: false,
+	})
+	// If not teams are assigned everybody can access this operator / installation
+	// If one or more teams are assigned, then only the assigned teams can access this operator / installation
+	addOrUpdateField(collection, &core.RelationField{
+		Name:         "teams",
+		CollectionId: teamsCollection.Id,
+		MaxSelect:    10000,
+		MinSelect:    0,
+	})
 
 	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)
 	if err := app.Save(collection); err != nil {
@@ -157,6 +174,7 @@ func initNATSAuthAccountsCollection(ctx context.Context,
 	app core.App,
 	logger *slog.Logger,
 	rule string,
+	teamsCollection *core.Collection,
 	operatorCollection *core.Collection,
 	limitCollection *core.Collection,
 	initialOperatorURLs string,
@@ -172,11 +190,11 @@ func initNATSAuthAccountsCollection(ctx context.Context,
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
-	collection.ListRule = types.Pointer(rule)
-	collection.ViewRule = types.Pointer(rule)
-	collection.CreateRule = types.Pointer(rule)
-	collection.UpdateRule = types.Pointer(rule)
-	collection.DeleteRule = types.Pointer(rule)
+	collection.ListRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
+	collection.ViewRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
+	collection.CreateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
+	collection.UpdateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
+	collection.DeleteRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
 	collection.Indexes = types.JSONArray[string]{
 		"create unique index nats_accounts_unique_name_operator on keys (name,operator)",
 		"create unique index nats_accounts_unique_public_key on keys (public_key)",
@@ -229,6 +247,14 @@ func initNATSAuthAccountsCollection(ctx context.Context,
 		CollectionId: limitCollection.Id,
 		Required:     false,
 		MaxSelect:    1,
+	})
+	// If not teams are assigned everybody can access this account
+	// If one or more teams are assigned, then only the assigned teams can access this account
+	addOrUpdateField(collection, &core.RelationField{
+		Name:         "teams",
+		CollectionId: teamsCollection.Id,
+		MaxSelect:    10000,
+		MinSelect:    0,
 	})
 
 	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)
@@ -360,7 +386,8 @@ func initNATSAuthUsersCollection(_ context.Context,
 func initNATSAuthLimitsCollection(_ context.Context,
 	app core.App,
 	_ *slog.Logger,
-	rule string) (*core.Collection, error) {
+	rule string,
+	operatorCollection *core.Collection) (*core.Collection, error) {
 
 	collection, err := app.FindCollectionByNameOrId("nats_auth_limits")
 
@@ -383,6 +410,13 @@ func initNATSAuthLimitsCollection(_ context.Context,
 	addOrUpdateField(collection, &core.TextField{
 		Name:     "name",
 		Required: true,
+	})
+	addOrUpdateField(collection, &core.RelationField{
+		Name:          "operator",
+		Required:      true,
+		CollectionId:  operatorCollection.Id,
+		MaxSelect:     1,
+		CascadeDelete: true,
 	})
 	addOrUpdateField(collection, &core.SelectField{
 		Name:     "type",

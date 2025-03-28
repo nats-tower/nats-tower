@@ -28,6 +28,7 @@ type NATSAuthModule struct {
 	NATSOperatorCollection *core.Collection
 	NATSAccountCollection  *core.Collection
 	NATSUserCollection     *core.Collection
+	NATSLimitsCollection   *core.Collection
 }
 
 type NATSAuthModuleConfig struct {
@@ -43,6 +44,7 @@ type NATSAuthModuleConfig struct {
 	InitialAccountSigningSeed string
 
 	DisableNATSCLIContexts bool
+	TeamsCollection        *core.Collection
 }
 
 func CreateNATSAuthModule(ctx context.Context,
@@ -88,7 +90,7 @@ func CreateNATSAuthModule(ctx context.Context,
 					return fmt.Errorf("operator has no signing seed. Seems like the operator is not under our control and you may only be allowed to create new user records")
 				}
 
-				limits, err := t.getAccountLimits(ctx, e.App, record)
+				limits, err := t.getAccountLimits(ctx, e.App, operatorRecord.Id, record)
 				if err != nil {
 					logger.ErrorContext(ctx, "Could not get account limits",
 						slog.String("error", err.Error()))
@@ -165,7 +167,7 @@ func CreateNATSAuthModule(ctx context.Context,
 		}
 		accountClaims.SigningKeys.Add(record.GetString("sign_public_key"))
 
-		limits, err := t.getAccountLimits(ctx, dao, record)
+		limits, err := t.getAccountLimits(ctx, dao, operatorRecord.Id, record)
 		if err != nil {
 			logger.ErrorContext(ctx, "Could not get account limits",
 				slog.String("error", err.Error()))
@@ -354,7 +356,13 @@ func CreateNATSAuthModule(ctx context.Context,
 				return nil
 			}
 
-			err := t.publishAccountRecordRemoval(ctx, e.App, record)
+			_, err := t.cfg.App.FindRecordById("nats_auth_operators", record.GetString("operator"))
+			if err != nil {
+				logger.InfoContext(ctx, "Could not find operator for account, operator may have been deleted. Skipping account update...")
+				return nil
+			}
+
+			err = t.publishAccountRecordRemoval(ctx, e.App, record)
 			if err != nil {
 				logger.ErrorContext(ctx, "Could not publish removed account",
 					slog.String("error", err.Error()))
@@ -424,12 +432,63 @@ func CreateNATSAuthModule(ctx context.Context,
 			slog.String("collection", e.Record.TableName()),
 			slog.String("record_id", e.Record.Id))
 
+		if e.Record.TableName() == "nats_auth_operators" {
+			// new operator create => let's create a system account
+			operatorRecord := e.Record
+
+			logger = logger.With(slog.String("operator_id", operatorRecord.Id))
+
+			logger.InfoContext(ctx, "Creating default limit for operator...")
+			limits := core.NewRecord(t.NATSLimitsCollection)
+			limits.Set("operator", operatorRecord.Id)
+			limits.Set("name", "default")
+			limits.Set("type", "account")
+			limits.Set("max_connections", -1)
+			limits.Set("jetstream_max_disk", -1)
+			limits.Set("jetstream_max_memory", -1)
+			limits.Set("default", true)
+
+			if err := e.App.Save(limits); err != nil {
+				logger.ErrorContext(ctx, "Could not save default limit",
+					slog.String("error", err.Error()))
+				return err
+			}
+
+			logger.InfoContext(ctx, "Default limit created for operator", slog.String("operator_id", operatorRecord.Id))
+
+			logger.InfoContext(ctx, "Creating system account for operator...")
+
+			sysAccountRecord := core.NewRecord(t.NATSAccountCollection)
+			sysAccountRecord.Set("operator", operatorRecord.Id)
+			sysAccountRecord.Set("name", "SYS")
+			sysAccountRecord.Set("description", "Automatically created system account")
+
+			if err := e.App.Save(sysAccountRecord); err != nil {
+				logger.ErrorContext(ctx, "Could not save system account",
+					slog.String("error", err.Error()))
+				return err
+			}
+
+			logger.InfoContext(ctx, "System account created for operator", slog.String("account_id", sysAccountRecord.Id))
+		}
+
 		if e.Record.TableName() == "nats_auth_accounts" {
 			record := e.Record
 			logger = logger.With(slog.String("operator_id", record.GetString("operator")))
 
-			// ignore system accounts
+			// handle system accounts
 			if record.GetString("name") == "SYS" {
+				logger.InfoContext(ctx, "System account created. Skipping account update...but creating system user")
+				sysAccount := core.NewRecord(t.NATSUserCollection)
+				sysAccount.Set("account", record.Id)
+				sysAccount.Set("name", "sys")
+				sysAccount.Set("description", "Automatically created system user")
+
+				if err := e.App.Save(sysAccount); err != nil {
+					logger.ErrorContext(ctx, "Could not save system user",
+						slog.String("error", err.Error()))
+					return err
+				}
 				return nil
 			}
 
