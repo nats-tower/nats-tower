@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/nats-io/jsm.go/natscontext"
 	"github.com/nats-io/jwt/v2"
@@ -22,13 +24,16 @@ var (
 )
 
 type NATSAuthModule struct {
-	ctx                    context.Context
-	logger                 *slog.Logger
-	cfg                    NATSAuthModuleConfig
-	NATSOperatorCollection *core.Collection
-	NATSAccountCollection  *core.Collection
-	NATSUserCollection     *core.Collection
-	NATSLimitsCollection   *core.Collection
+	ctx                          context.Context
+	logger                       *slog.Logger
+	cfg                          NATSAuthModuleConfig
+	NATSOperatorCollection       *core.Collection
+	NATSAccountCollection        *core.Collection
+	NATSAccountPendingCollection *core.Collection
+	NATSUserCollection           *core.Collection
+	NATSLimitsCollection         *core.Collection
+
+	pendingLock sync.Mutex
 }
 
 type NATSAuthModuleConfig struct {
@@ -191,15 +196,18 @@ func CreateNATSAuthModule(ctx context.Context,
 		}
 
 		// send account to nats
-		logger.InfoContext(ctx, "Publishing updated account...",
+		logger.InfoContext(ctx, "Queuing account update...",
 			slog.String("name", record.GetString("name")))
 
-		err = t.publishAccountRecord(ctx, dao, record)
+		_, err = t.requestAccountPublish(ctx, dao, record, AccountPublishActionUpsert)
 		if err != nil {
-			logger.ErrorContext(ctx, "Could not publish updated account",
+			logger.ErrorContext(ctx, "Could not queue account update",
 				slog.String("error", err.Error()))
 			return err
 		}
+
+		t.handlePendingAccountActions(record.Id)
+
 		return nil
 	}
 
@@ -342,32 +350,71 @@ func CreateNATSAuthModule(ctx context.Context,
 		return e.Next()
 	})
 
-	t.cfg.App.OnRecordAfterDeleteSuccess().BindFunc(func(e *core.RecordEvent) error {
-		logger := logger.With(slog.String("hook", "OnModelAfterDelete"),
+	t.cfg.App.OnRecordDeleteRequest().BindFunc(func(e *core.RecordRequestEvent) error {
+		logger := logger.With(slog.String("hook", "OnModelDelete"),
 			slog.String("collection", e.Record.TableName()),
 			slog.String("record_id", e.Record.Id))
 
 		if e.Record.TableName() == "nats_auth_accounts" {
-			logger.Info("Account deleted. Working on account update...")
+			logger.Info("Account about to be deleted. Suspend account deletion until after removal from cluster...")
 			record := e.Record
 			logger = logger.With(slog.String("operator_id", record.GetString("operator")))
 
 			if record.GetString("name") == "SYS" {
-				return nil
+				// do not delete system accounts
+				return fmt.Errorf("cannot delete system account")
 			}
 
-			_, err := t.cfg.App.FindRecordById("nats_auth_operators", record.GetString("operator"))
-			if err != nil {
-				logger.InfoContext(ctx, "Could not find operator for account, operator may have been deleted. Skipping account update...")
-				return nil
-			}
-
-			err = t.publishAccountRecordRemoval(ctx, e.App, record)
+			_, err := t.requestAccountPublish(ctx, e.App, record, AccountPublishActionDelete)
 			if err != nil {
 				logger.ErrorContext(ctx, "Could not publish removed account",
 					slog.String("error", err.Error()))
 				return err
 			}
+
+			t.handlePendingAccountActions(record.Id)
+
+			return nil // return nil to suspend deletion
+		}
+
+		return e.Next()
+	})
+
+	t.cfg.App.OnRecordAfterDeleteSuccess().BindFunc(func(e *core.RecordEvent) error {
+		logger := logger.With(slog.String("hook", "OnModelAfterDelete"),
+			slog.String("collection", e.Record.TableName()),
+			slog.String("record_id", e.Record.Id))
+
+		if e.Record.TableName() == "nats_auth_accounts_pending" {
+
+			if AccountPublishAction(e.Record.GetString("action")) != AccountPublishActionDelete {
+				return e.Next()
+			}
+
+			logger.Info("Account deleted on installation. Working on account removal...")
+			record := e.Record
+			logger = logger.With(slog.String("account_id", record.GetString("account")))
+
+			accountRecord, err := t.cfg.App.FindRecordById("nats_auth_accounts", record.GetString("account"))
+			if err != nil {
+				if err == sql.ErrNoRows {
+					logger.InfoContext(ctx, "Account for pending account not found. Skipping account removal...")
+					return e.Next()
+				}
+				logger.ErrorContext(ctx, "Could not find account for pending account",
+					slog.String("error", err.Error()))
+				return err
+			}
+			logger = logger.With(slog.String("operator_id", accountRecord.GetString("operator")))
+
+			err = t.cfg.App.Delete(accountRecord)
+			if err != nil {
+				logger.ErrorContext(ctx, "Could not delete account after pending account was removed",
+					slog.String("error", err.Error()))
+				return err
+			}
+
+			return e.Next()
 		}
 
 		if e.Record.TableName() == "nats_auth_users" {
@@ -489,17 +536,19 @@ func CreateNATSAuthModule(ctx context.Context,
 						slog.String("error", err.Error()))
 					return err
 				}
-				return nil
+				return e.Next()
 			}
 
 			// send account to nats
-			err := t.publishAccountRecord(ctx, e.App, record)
+			_, err := t.requestAccountPublish(ctx, e.App, record, AccountPublishActionUpsert)
 			if err != nil {
 				logger.ErrorContext(ctx, "Could not publish created account",
 					slog.String("error", err.Error()))
 				return err
 			}
-			return nil
+
+			t.handlePendingAccountActions(record.Id)
+			return e.Next()
 		}
 		if e.Record.TableName() == "nats_auth_users" && !cfg.DisableNATSCLIContexts { // only create user contexts if not disabled
 			record := e.Record
@@ -627,6 +676,18 @@ func CreateNATSAuthModule(ctx context.Context,
 		}
 	} else {
 		logger.InfoContext(ctx, "NATS CLI contexts are disabled...")
+	}
+
+	err = cfg.App.Cron().Add("work-pending-account-actions", "*/5 * * * *", func() {
+		start := time.Now()
+		logger.DebugContext(ctx, "Checking pending account actions...")
+		defer func() {
+			logger.DebugContext(ctx, "Checking pending account actions...Done", slog.Duration("duration", time.Since(start)))
+		}()
+		t.handlePendingAccountActions("") // check all pending actions
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return t, nil

@@ -32,6 +32,17 @@ function resolveBreadcrumb(
 }
 
 export function getNavInfo(resolvedHref: string) {
+
+	if (resolvedHref === "/installations" || resolvedHref === "/installations/") {
+		return {
+			breadcrumbs: [{
+				name: "Installations",
+				url: "/installations",
+			}],
+			items: [],
+		};		
+	}
+
 	const navInfo: {
 		breadcrumbs: {
 			name: string;

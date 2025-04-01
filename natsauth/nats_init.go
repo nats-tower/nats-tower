@@ -50,6 +50,17 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 	if err != nil {
 		return err
 	}
+
+	// create pending collection
+	pendingCollection, err := initNATSAuthAccountsPendingCollection(m.ctx,
+		app,
+		m.logger,
+		apiRule,
+		accountCollection)
+	if err != nil {
+		return err
+	}
+
 	userCollection, err := initNATSAuthUsersCollection(m.ctx,
 		app,
 		m.logger,
@@ -60,6 +71,7 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 	}
 	m.NATSOperatorCollection = operatorCollection
 	m.NATSAccountCollection = accountCollection
+	m.NATSAccountPendingCollection = pendingCollection
 	m.NATSUserCollection = userCollection
 	m.NATSLimitsCollection = limitCollection
 
@@ -311,6 +323,53 @@ func initNATSAuthAccountsCollection(ctx context.Context,
 	return collection, nil
 }
 
+func initNATSAuthAccountsPendingCollection(ctx context.Context,
+	app core.App,
+	logger *slog.Logger,
+	rule string,
+	accountCollection *core.Collection) (*core.Collection, error) {
+
+	collection, err := app.FindCollectionByNameOrId("nats_auth_accounts_pending")
+
+	if err == sql.ErrNoRows {
+		collection = core.NewBaseCollection("nats_auth_accounts_pending")
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	collection.ListRule = types.Pointer(rule + " && (account.teams:length = 0 || account.teams.members.id ?= @request.auth.id)")
+	collection.ViewRule = types.Pointer(rule + " && (account.teams:length = 0 || account.teams.members.id ?= @request.auth.id)")
+	collection.CreateRule = nil
+	collection.UpdateRule = nil
+	collection.DeleteRule = nil
+	collection.Indexes = types.JSONArray[string]{
+		"create unique index nats_auth_accounts_pending_unique on keys (account)",
+	}
+
+	addOrUpdateField(collection, &core.RelationField{
+		Name:          "account",
+		Required:      true,
+		CollectionId:  accountCollection.Id,
+		MaxSelect:     1,
+		CascadeDelete: true,
+	})
+
+	addOrUpdateField(collection, &core.SelectField{
+		Name:      "action",
+		Required:  true,
+		MaxSelect: 1,
+		Values:    []string{"upsert", "delete"},
+	})
+
+	addOrUpdateField(collection, &core.TextField{
+		Name: "message",
+	})
+	if err := app.Save(collection); err != nil {
+		return nil, err
+	}
+	return collection, nil
+}
+
 func initNATSAuthUsersCollection(_ context.Context,
 	app core.App,
 	_ *slog.Logger,
@@ -404,7 +463,7 @@ func initNATSAuthLimitsCollection(_ context.Context,
 	collection.UpdateRule = types.Pointer(rule)
 	collection.DeleteRule = types.Pointer(rule)
 	collection.Indexes = types.JSONArray[string]{
-		"create unique index nats_auth_limits_unique_name on nats_auth_limits (name)",
+		"create unique index nats_auth_limits_unique_name_operator on nats_auth_limits (name,operator)",
 	}
 
 	addOrUpdateField(collection, &core.TextField{
@@ -434,15 +493,13 @@ func initNATSAuthLimitsCollection(_ context.Context,
 	})
 
 	addOrUpdateField(collection, &core.NumberField{
-		Name:     "jetstream_max_memory",
-		Required: true,
-		OnlyInt:  true,
+		Name:    "jetstream_max_memory",
+		OnlyInt: true,
 	})
 
 	addOrUpdateField(collection, &core.NumberField{
-		Name:     "jetstream_max_disk",
-		Required: true,
-		OnlyInt:  true,
+		Name:    "jetstream_max_disk",
+		OnlyInt: true,
 	})
 
 	addOrUpdateField(collection, &core.BoolField{

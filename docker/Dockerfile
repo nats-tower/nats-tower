@@ -1,9 +1,36 @@
+
+# build the frontend
+FROM node:20.19.0-alpine3.21 AS frontendbuilder
+
+WORKDIR /app
+
+# Install dependencies based on the preferred package manager
+COPY frontend/package.json frontend/yarn.lock* frontend/package-lock.json* frontend/pnpm-lock.yaml* ./
+
+RUN ls
+
+RUN \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
+
+# The actual app code
+COPY frontend/ ./
+RUN \
+  if [ -f yarn.lock ]; then yarn run build --outDir /pb/pb_public; \
+  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build --outDir /pb/pb_public; \
+  elif [ -f package-lock.json ]; then npm run build --outDir /pb/pb_public; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
+
 # build backend
 FROM golang:1.23-alpine AS build
 
 RUN apk add --no-cache git
 
-RUN go install github.com/nats-io/natscli/nats@v0.1.4
+RUN go install github.com/nats-io/natscli/nats@v0.2.0
 
 WORKDIR /src
 
@@ -12,16 +39,20 @@ COPY ./ ./
 # Run tests​
 # RUN CGO_ENABLED=0 go test -timeout 30s -v ./...
 
+# copy the frontend build​ into wwwroot
+COPY --from=frontendbuilder /pb/pb_public /src/cmd/wwwroot
+
 # Build the executable​
 RUN CGO_ENABLED=0 go build \
     -mod=vendor \
     -o /app ./cmd/
     
 # STAGE 2: get a simple sh
-FROM busybox:1.35.0-uclibc AS busybox
+FROM busybox:1.37.0-uclibc AS busybox
 
 # STAGE 4: build the container to run​
-FROM gcr.io/distroless/static AS final
+#FROM gcr.io/distroless/static AS final
+FROM debian AS final
 
 # copy compiled app​
 COPY --from=build /app /app
@@ -36,4 +67,4 @@ COPY --from=busybox /bin/sh /bin/sh
 
 WORKDIR /
 
-ENTRYPOINT ["/app", "serve", "--http 0.0.0.0:8090"]
+ENTRYPOINT ["/app"]

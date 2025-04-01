@@ -2,8 +2,6 @@ import { pb } from "@/lib/pocketbase";
 import type {
 	NatsAuthAccountsRecord,
 	NatsAuthOperatorsRecord,
-	NatsAuthUsersRecord,
-	TeamsRecord,
 } from "@/lib/pocketbase-types";
 import { useInstallation } from "@/lib/preferences";
 import { createFileRoute } from "@tanstack/react-router";
@@ -24,8 +22,9 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
-import { InstallationTeamInfo } from "@/components/ui/installation-team-info";
-import type { ExpandedNatsAuthOperatorsResponse } from "@/lib/expanded-pocketbase-types";
+import { InstallationTeamInfo } from "@/components/ui/installation-team-info/installation-team-info";
+import { getInstallationByIdWithTeams } from "@/services/installations";
+import React from "react";
 
 export const Route = createFileRoute("/_app/installations/$installationId")({
 	component: Installation,
@@ -34,25 +33,21 @@ export const Route = createFileRoute("/_app/installations/$installationId")({
 function Installation() {
 	const { installationId } = Route.useParams();
 	const installationPref = useInstallation();
-	const { data, error, isLoading } = useSWR(
-		[`/installations/${installationId}`, installationId],
-		async ([_, pInstallationId]) => {
-			if (!pInstallationId) {
-				return;
-			}
-			return pb
-				.collection<ExpandedNatsAuthOperatorsResponse>("nats_auth_operators")
-				.getOne(pInstallationId, {
-					expand: "teams",
-				})
-				.then((res) => {
-					if (installationPref.installationId !== pInstallationId) {
-						installationPref.setInstallationId(pInstallationId);
-					}
-					return res;
-				});
-		},
-	);
+	const { data, error, isLoading, mutate } =
+		getInstallationByIdWithTeams(installationId);
+
+	// Update default installationId in user preferences
+	// this will automatically select the installation on login
+	React.useEffect(() => {
+		if (installationPref.installationId !== installationId) {
+			installationPref.setInstallationId(installationId);
+		}
+	}, [
+		installationId,
+		installationPref.installationId,
+		installationPref,
+		installationPref.setInstallationId,
+	]);
 
 	const handleCopy = (value: string | undefined) => {
 		if (!value) {
@@ -212,9 +207,15 @@ resolver_preload = {
 							</div>
 						</div>
 					</div>
+
 					<Separator orientation="horizontal" className="my-6" />
-					{data ? <InstallationTeamInfo installation={data} /> : undefined}
+
+					{data ? (
+						<InstallationTeamInfo installation={data} refresh={mutate} />
+					) : undefined}
+
 					<Separator orientation="horizontal" className="my-6" />
+
 					<ClusterInfo installationId={installationId} />
 				</div>
 			</div>

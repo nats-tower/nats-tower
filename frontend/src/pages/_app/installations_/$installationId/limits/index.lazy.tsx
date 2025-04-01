@@ -309,7 +309,7 @@ function Limits() {
 												</div>
 											</PopoverContent>
 										</Popover>
-									) : undefined}
+									) : <span>{"<None>"}</span>}
 								</TableCell>
 							</TableRow>
 						))}

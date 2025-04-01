@@ -1,11 +1,7 @@
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import {
 	SheetHeader,
 	SheetTitle,
 	SheetDescription,
-	SheetFooter,
-	SheetClose,
 } from "@/components/ui/sheet";
 import {
 	Table,
@@ -16,7 +12,6 @@ import {
 	TableBody,
 	TableCaption,
 } from "@/components/ui/table";
-import { Button } from "./button";
 import { pb } from "@/lib/pocketbase";
 import type {
 	NatsAuthOperatorsRecord,
@@ -71,29 +66,6 @@ export function AccountInfoSheet({
 	);
 
 	const {
-		data: usersData,
-		error: usersError,
-		isLoading: usersLoading,
-	} = useSWR(
-		[
-			`/installations/${installationId}/accounts/${accountId}/users`,
-			installationId,
-			accountId,
-		],
-		async ([_, installationId, accountId]) => {
-			if (!installationId || !accountId) {
-				return;
-			}
-
-			return pb
-				.collection<NatsAuthAccountsRecord>("nats_auth_users")
-				.getFullList({
-					filter: `account = "${accountId}"`,
-				});
-		},
-	);
-
-	const {
 		data: streamsData,
 		error: streamsError,
 		isLoading: streamsLoading,
@@ -117,9 +89,9 @@ export function AccountInfoSheet({
 		},
 	);
 
-	if (installationError || accountError || usersError || streamsError)
+	if (installationError || accountError || streamsError)
 		return <div>failed to load</div>;
-	if (installationLoading || accountLoading || usersLoading || streamsLoading)
+	if (installationLoading || accountLoading || streamsLoading)
 		return <div>loading...</div>;
 
 	return (

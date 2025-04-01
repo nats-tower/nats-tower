@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, InfoIcon, Save } from "lucide-react";
+import { ChevronsUpDown, InfoIcon } from "lucide-react";
 
 import {
 	DropdownMenu,
@@ -17,25 +17,13 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import useSWR from "swr";
-import { pb } from "@/lib/pocketbase";
 import type { NatsAuthOperatorsRecord } from "@/lib/pocketbase-types";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
+import { Dialog, DialogTrigger } from "../ui/dialog";
+import { AddInstallationDialogContent } from "../ui/installations/add-installation-dialog";
+import { getInstallations } from "@/services/installations";
 
 function getActiveInstallation(
 	href: string | undefined,
@@ -57,14 +45,7 @@ export function InstallationSwitcher() {
 	const { resolvedLocation } = useRouterState();
 	const { isMobile } = useSidebar();
 
-	const { data, error, isLoading, mutate } = useSWR(
-		"/installations",
-		async () => {
-			return pb
-				.collection<NatsAuthOperatorsRecord>("nats_auth_operators")
-				.getFullList();
-		},
-	);
+	const { data, error, isLoading, mutate } = getInstallations();
 
 	if (error) return <div>failed to load</div>;
 	if (isLoading) return <div>loading...</div>;
@@ -129,7 +110,9 @@ export function InstallationSwitcher() {
 								<DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
 							</DropdownMenuItem>
 						))}
+						
 						<DropdownMenuSeparator />
+
 						<Dialog
 							open={dialogCreateInstallationOpen}
 							onOpenChange={setDialogCreateInstallationOpen}
@@ -138,7 +121,7 @@ export function InstallationSwitcher() {
 								<DropdownMenuItem
 									className="gap-2 p-2 cursor-pointer"
 									onClick={(ev) => {
-										ev.stopPropagation();										
+										ev.stopPropagation();
 										setDialogCreateInstallationOpen(true);
 										ev.preventDefault();
 									}}
@@ -151,81 +134,13 @@ export function InstallationSwitcher() {
 									</div>
 								</DropdownMenuItem>
 							</DialogTrigger>
-							<DialogContent className="sm:max-w-xl">
-								<form
-									className="space-y-4"
-									onSubmit={async (e) => {
-										e.preventDefault();
-										const form = e.target as HTMLFormElement;
-										const url =
-											form.querySelector<HTMLInputElement>("#url")?.value;
-										const description =
-											form.querySelector<HTMLInputElement>(
-												"#description",
-											)?.value;
-										if (!url || !description) {
-											return;
-										}
-										await pb
-											.collection<NatsAuthOperatorsRecord>(
-												"nats_auth_operators",
-											)
-											.create({
-												url,
-												description,
-											});
 
-										mutate();
-										setDialogCreateInstallationOpen(false);
-									}}
-								>
-									<DialogHeader>
-										<DialogTitle>Add new installation</DialogTitle>
-										<DialogDescription>
-											Fill in URLs and a description for the new installation.
-										</DialogDescription>
-									</DialogHeader>
-									<div className="flex items-center space-x-2 mt-2">
-										<div className="grid flex-1 gap-2">
-											<Label htmlFor="url">
-												URL
-											</Label>
-											<p className="text-sm text-gray-500">Enter NATS server URL(s) - comma separated</p>
-											<Input
-												id="url"
-												defaultValue=""
-												placeholder="nats://localhost:4222,nats://localhost:4223"
-												required
-											/>
-										</div>
-									</div>
-									<div className="flex items-center space-x-2 mt-2">
-										<div className="grid flex-1 gap-2">
-											<Label htmlFor="description">
-												Description
-											</Label>
-											<p className="text-sm text-gray-500">Enter installation description (prod, stage, etc.)</p>
-											<Input
-												id="description"
-												defaultValue=""
-												placeholder="prod-eu"
-												required
-											/>
-										</div>
-									</div>
-									<DialogFooter className="justify-end mt-2">
-										<DialogClose asChild>
-											<Button type="button" variant="secondary">
-												Close
-											</Button>
-										</DialogClose>
-										<Button type="submit" className="px-3">
-											<Save />
-											<span>Add Installation</span>
-										</Button>
-									</DialogFooter>
-								</form>
-							</DialogContent>
+							<AddInstallationDialogContent
+								mutate={mutate}
+								setDialogCreateInstallationOpen={
+									setDialogCreateInstallationOpen
+								}
+							/>
 						</Dialog>
 					</DropdownMenuContent>
 				</DropdownMenu>

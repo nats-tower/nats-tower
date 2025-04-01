@@ -1,6 +1,4 @@
-import { pb } from "@/lib/pocketbase";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import useSWR from "swr";
 import {
 	Card,
 	CardContent,
@@ -11,7 +9,10 @@ import {
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
 
-import type { NatsAuthOperatorsRecord } from "@/lib/pocketbase-types";
+import { getInstallations } from "@/services/installations";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { AddInstallationDialogContent } from "@/components/ui/installations/add-installation-dialog";
+import { useState } from "react";
 
 export const Route = createLazyFileRoute("/_app/installations/")({
 	component: Installations,
@@ -19,12 +20,10 @@ export const Route = createLazyFileRoute("/_app/installations/")({
 
 function Installations() {
 	const navigate = useNavigate();
+	const [dialogCreateInstallationOpen, setDialogCreateInstallationOpen] =
+		useState(false);
 
-	const { data, error, isLoading } = useSWR("/installations", async () => {
-		return pb
-			.collection<NatsAuthOperatorsRecord>("nats_auth_operators")
-			.getFullList();
-	});
+	const { data, error, isLoading, mutate } = getInstallations();
 
 	if (error) return <div>failed to load</div>;
 	if (isLoading) return <div>loading...</div>;
@@ -39,10 +38,32 @@ function Installations() {
 							<CardTitle>Installations</CardTitle>
 							<CardDescription>All existing NATS installations</CardDescription>
 						</div>
-						<Button className="ml-10">
-							<PlusIcon /> Add Installation
-						</Button>
+
+						<Dialog
+							open={dialogCreateInstallationOpen}
+							onOpenChange={setDialogCreateInstallationOpen}
+						>
+							<DialogTrigger asChild>
+								<Button
+									className="ml-10"
+									variant="outline"
+									onClick={() => {
+										setDialogCreateInstallationOpen(true);
+									}}
+								>
+									<PlusIcon /> Add Installation
+								</Button>
+							</DialogTrigger>
+
+							<AddInstallationDialogContent
+								mutate={mutate}
+								setDialogCreateInstallationOpen={
+									setDialogCreateInstallationOpen
+								}
+							/>
+						</Dialog>
 					</CardHeader>
+
 					<CardContent>
 						{data?.length === 0 ? (
 							<div>No installations found.</div>

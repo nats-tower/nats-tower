@@ -15,7 +15,8 @@
       "type": "shell",
       "isBackground": true,
       "options": {
-        "env": {}
+        "env": {
+        }
       }
     },
     {
