@@ -51,8 +51,8 @@ RUN CGO_ENABLED=0 go build \
 FROM busybox:1.37.0-uclibc AS busybox
 
 # STAGE 4: build the container to run​
-#FROM gcr.io/distroless/static AS final
-FROM debian AS final
+FROM gcr.io/distroless/static AS final
+#FROM debian AS final
 
 # copy compiled app​
 COPY --from=build /app /app
@@ -64,6 +64,10 @@ ENV XDG_CONFIG_HOME=/pb_data/.config
 COPY --from=build /go/bin/nats /bin/nats
 # copy sh
 COPY --from=busybox /bin/sh /bin/sh
+# copy ls from busybox
+COPY --from=busybox /bin/ls /bin/ls
+# copy cat from busybox
+COPY --from=busybox /bin/cat /bin/cat
 
 WORKDIR /
 
