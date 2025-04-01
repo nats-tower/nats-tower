@@ -15,7 +15,7 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 
 	apiRule := "@request.auth.id != ''"
 	if m.cfg.APIToken != "" {
-		apiRule = fmt.Sprintf("@request.auth.id != '' || @request.headers.x_token = '%s'", m.cfg.APIToken)
+		apiRule = fmt.Sprintf("@request.headers.x_token = '%s' || @request.auth.id != ''", m.cfg.APIToken)
 	}
 
 	operatorCollection, err := initNATSAuthOperatorsCollection(m.ctx,
