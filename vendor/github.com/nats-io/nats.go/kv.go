@@ -54,6 +54,7 @@ type KeyValue interface {
 	// Create will add the key/value pair iff it does not exist.
 	Create(key string, value []byte) (revision uint64, err error)
 	// Update will update the value iff the latest revision matches.
+	// Update also resets the TTL associated with the key (if any).
 	Update(key string, value []byte, last uint64) (revision uint64, err error)
 	// Delete will place a delete marker and leave all revisions.
 	Delete(key string, opts ...DeleteOpt) error
@@ -64,8 +65,11 @@ type KeyValue interface {
 	Watch(keys string, opts ...WatchOpt) (KeyWatcher, error)
 	// WatchAll will invoke the callback for all updates.
 	WatchAll(opts ...WatchOpt) (KeyWatcher, error)
+	// WatchFiltered will watch for any updates to keys that match the keys
+	// argument. It can be configured with the same options as Watch.
+	WatchFiltered(keys []string, opts ...WatchOpt) (KeyWatcher, error)
 	// Keys will return all keys.
-	// DEPRECATED: Use ListKeys instead to avoid memory issues.
+	// Deprecated: Use ListKeys instead to avoid memory issues.
 	Keys(opts ...WatchOpt) ([]string, error)
 	// ListKeys will return all keys in a channel.
 	ListKeys(opts ...WatchOpt) (KeyLister, error)
@@ -249,22 +253,22 @@ func purge() DeleteOpt {
 
 // KeyValueConfig is for configuring a KeyValue store.
 type KeyValueConfig struct {
-	Bucket       string
-	Description  string
-	MaxValueSize int32
-	History      uint8
-	TTL          time.Duration
-	MaxBytes     int64
-	Storage      StorageType
-	Replicas     int
-	Placement    *Placement
-	RePublish    *RePublish
-	Mirror       *StreamSource
-	Sources      []*StreamSource
+	Bucket       string          `json:"bucket"`
+	Description  string          `json:"description,omitempty"`
+	MaxValueSize int32           `json:"max_value_size,omitempty"`
+	History      uint8           `json:"history,omitempty"`
+	TTL          time.Duration   `json:"ttl,omitempty"`
+	MaxBytes     int64           `json:"max_bytes,omitempty"`
+	Storage      StorageType     `json:"storage,omitempty"`
+	Replicas     int             `json:"num_replicas,omitempty"`
+	Placement    *Placement      `json:"placement,omitempty"`
+	RePublish    *RePublish      `json:"republish,omitempty"`
+	Mirror       *StreamSource   `json:"mirror,omitempty"`
+	Sources      []*StreamSource `json:"sources,omitempty"`
 
 	// Enable underlying stream compression.
 	// NOTE: Compression is supported for nats-server 2.10.0+
-	Compression bool
+	Compression bool `json:"compression,omitempty"`
 }
 
 // Used to watch all keys.
@@ -344,8 +348,9 @@ const (
 
 // Regex for valid keys and buckets.
 var (
-	validBucketRe = regexp.MustCompile(`\A[a-zA-Z0-9_-]+\z`)
-	validKeyRe    = regexp.MustCompile(`\A[-/_=\.a-zA-Z0-9]+\z`)
+	validBucketRe    = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	validKeyRe       = regexp.MustCompile(`^[-/_=\.a-zA-Z0-9]+$`)
+	validSearchKeyRe = regexp.MustCompile(`^[-/_=\.a-zA-Z0-9*]*[>]?$`)
 )
 
 // KeyValue will lookup and bind to an existing KeyValue store.
@@ -353,7 +358,7 @@ func (js *js) KeyValue(bucket string) (KeyValue, error) {
 	if !js.nc.serverMinVersion(2, 6, 2) {
 		return nil, errors.New("nats: key-value requires at least server version 2.6.2")
 	}
-	if !validBucketRe.MatchString(bucket) {
+	if !bucketValid(bucket) {
 		return nil, ErrInvalidBucketName
 	}
 	stream := fmt.Sprintf(kvBucketNameTmpl, bucket)
@@ -381,7 +386,7 @@ func (js *js) CreateKeyValue(cfg *KeyValueConfig) (KeyValue, error) {
 	if cfg == nil {
 		return nil, ErrKeyValueConfigRequired
 	}
-	if !validBucketRe.MatchString(cfg.Bucket) {
+	if !bucketValid(cfg.Bucket) {
 		return nil, ErrInvalidBucketName
 	}
 	if _, err := js.AccountInfo(); err != nil {
@@ -507,7 +512,7 @@ func (js *js) CreateKeyValue(cfg *KeyValueConfig) (KeyValue, error) {
 
 // DeleteKeyValue will delete this KeyValue store (JetStream stream).
 func (js *js) DeleteKeyValue(bucket string) error {
-	if !validBucketRe.MatchString(bucket) {
+	if !bucketValid(bucket) {
 		return ErrInvalidBucketName
 	}
 	stream := fmt.Sprintf(kvBucketNameTmpl, bucket)
@@ -547,11 +552,25 @@ func (e *kve) Created() time.Time    { return e.created }
 func (e *kve) Delta() uint64         { return e.delta }
 func (e *kve) Operation() KeyValueOp { return e.op }
 
+func bucketValid(bucket string) bool {
+	if len(bucket) == 0 {
+		return false
+	}
+	return validBucketRe.MatchString(bucket)
+}
+
 func keyValid(key string) bool {
 	if len(key) == 0 || key[0] == '.' || key[len(key)-1] == '.' {
 		return false
 	}
 	return validKeyRe.MatchString(key)
+}
+
+func searchKeyValid(key string) bool {
+	if len(key) == 0 || key[0] == '.' || key[len(key)-1] == '.' {
+		return false
+	}
+	return validSearchKeyRe.MatchString(key)
 }
 
 // Get returns the latest value for the key.
@@ -910,13 +929,14 @@ func (kv *kvs) History(key string, opts ...WatchOpt) ([]KeyValueEntry, error) {
 
 // Implementation for Watch
 type watcher struct {
-	mu          sync.Mutex
-	updates     chan KeyValueEntry
-	sub         *Subscription
-	initDone    bool
-	initPending uint64
-	received    uint64
-	ctx         context.Context
+	mu            sync.Mutex
+	updates       chan KeyValueEntry
+	sub           *Subscription
+	initDone      bool
+	initPending   uint64
+	received      uint64
+	ctx           context.Context
+	initDoneTimer *time.Timer
 }
 
 // Context returns the context for the watcher if set.
@@ -948,9 +968,12 @@ func (kv *kvs) WatchAll(opts ...WatchOpt) (KeyWatcher, error) {
 	return kv.Watch(AllKeys, opts...)
 }
 
-// Watch will fire the callback when a key that matches the keys pattern is updated.
-// keys needs to be a valid NATS subject.
-func (kv *kvs) Watch(keys string, opts ...WatchOpt) (KeyWatcher, error) {
+func (kv *kvs) WatchFiltered(keys []string, opts ...WatchOpt) (KeyWatcher, error) {
+	for _, key := range keys {
+		if !searchKeyValid(key) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidKey, "key cannot be empty and must be a valid NATS subject")
+		}
+	}
 	var o watchOpts
 	for _, opt := range opts {
 		if opt != nil {
@@ -961,10 +984,20 @@ func (kv *kvs) Watch(keys string, opts ...WatchOpt) (KeyWatcher, error) {
 	}
 
 	// Could be a pattern so don't check for validity as we normally do.
-	var b strings.Builder
-	b.WriteString(kv.pre)
-	b.WriteString(keys)
-	keys = b.String()
+	for i, key := range keys {
+		var b strings.Builder
+		b.WriteString(kv.pre)
+		b.WriteString(key)
+		keys[i] = b.String()
+	}
+
+	// if no keys are provided, watch all keys
+	if len(keys) == 0 {
+		var b strings.Builder
+		b.WriteString(kv.pre)
+		b.WriteString(AllKeys)
+		keys = []string{b.String()}
+	}
 
 	// We will block below on placing items on the chan. That is by design.
 	w := &watcher{updates: make(chan KeyValueEntry, 256), ctx: o.ctx}
@@ -1012,8 +1045,11 @@ func (kv *kvs) Watch(keys string, opts ...WatchOpt) (KeyWatcher, error) {
 				w.initPending = delta
 			}
 			if w.received > w.initPending || delta == 0 {
+				w.initDoneTimer.Stop()
 				w.initDone = true
 				w.updates <- nil
+			} else if w.initDoneTimer != nil {
+				w.initDoneTimer.Reset(kv.js.opts.wait)
 			}
 		}
 	}
@@ -1037,7 +1073,14 @@ func (kv *kvs) Watch(keys string, opts ...WatchOpt) (KeyWatcher, error) {
 	// update() callback.
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	sub, err := kv.js.Subscribe(keys, update, subOpts...)
+	var sub *Subscription
+	var err error
+	if len(keys) == 1 {
+		sub, err = kv.js.Subscribe(keys[0], update, subOpts...)
+	} else {
+		subOpts = append(subOpts, ConsumerFilterSubjects(keys...))
+		sub, err = kv.js.Subscribe("", update, subOpts...)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1049,6 +1092,16 @@ func (kv *kvs) Watch(keys string, opts ...WatchOpt) (KeyWatcher, error) {
 		if sub.jsi != nil && sub.jsi.pending == 0 {
 			w.initDone = true
 			w.updates <- nil
+		} else {
+			// Set a timer to send the marker if we do not get any messages.
+			w.initDoneTimer = time.AfterFunc(kv.js.opts.wait, func() {
+				w.mu.Lock()
+				defer w.mu.Unlock()
+				if !w.initDone {
+					w.initDone = true
+					w.updates <- nil
+				}
+			})
 		}
 	} else {
 		// if UpdatesOnly was used, mark initialization as complete
@@ -1058,10 +1111,17 @@ func (kv *kvs) Watch(keys string, opts ...WatchOpt) (KeyWatcher, error) {
 	sub.pDone = func(_ string) {
 		close(w.updates)
 	}
+
 	sub.mu.Unlock()
 
 	w.sub = sub
 	return w, nil
+}
+
+// Watch will fire the callback when a key that matches the keys pattern is updated.
+// keys needs to be a valid NATS subject.
+func (kv *kvs) Watch(keys string, opts ...WatchOpt) (KeyWatcher, error) {
+	return kv.WatchFiltered([]string{keys}, opts...)
 }
 
 // Bucket returns the current bucket name (JetStream stream).
