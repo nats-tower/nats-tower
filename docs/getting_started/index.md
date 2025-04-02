@@ -34,7 +34,8 @@ You can manage teams and users by using the admin interface at `http://localhost
 > You need to have the [NATS cli installed](https://github.com/nats-io/natscli?tab=readme-ov-file#installation).  
 > You followed the NATS Tower installation instructions and have a running NATS Tower instance.
 
-Steps to add a new NATS installation:
+Steps to add a new NATS installation:  
+
 1. Login as an admin at `http://localhost:8099/`. (Default admin: `admin@test.org`, password: `testtest`)
 2. Create the NATS installation in NATS Tower by clicking on the `+ Add installation` button.
 3. Set the URL to `nats://localhost:4222` and give it a description and click on `Add installation`.
