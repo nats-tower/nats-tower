@@ -13,10 +13,21 @@ The configuration of the application is done through environment variables. The 
 | `DEFAULT_USER_PASSWORD`  | Password for the initial regular user   | `testtest`       |
 | `API_TOKEN`              | Authentication token for the API        | Not set          |
 
-## Backup & Restore
+## SSO
 
-The application supports backup & restore through the admin interface of [Pocketbase](https://pocketbase.io/). See [here](https://pocketbase.io/docs/going-to-production/#backup-and-restore) for more information.
+NATS Tower supports SSO through the [Pocketbase](https://pocketbase.io/) admin interface.
 
-This makes sure that metadata and user data is stored in a safe place and can be restored in case of a failure.
+Additionally, for Microsoft Azure AD, you can enable a automatic group to teams sync by setting the following environment variables:
 
-The NATS Servers also hold the information about accounts within their resolvers. This information is not backed up by the application and needs to be backed up separately.
+| Variable                 | Description                             | Default          |
+| Variable                                  | Description                                    | Default |
+| ----------------------------------------- | ---------------------------------------------- | ------- |
+| `POCKETBASE_AUTH_MICROSOFT_ENABLED`       | Enable Microsoft Azure AD authentication       | `FALSE` |
+| `POCKETBASE_AUTH_MICROSOFT_CLIENT_ID`     | Microsoft OAuth2 client ID                     | Not set |
+| `POCKETBASE_AUTH_MICROSOFT_CLIENT_SECRET` | Microsoft OAuth2 client secret                 | Not set |
+| `POCKETBASE_AUTH_MICROSOFT_AUTH_URL`      | Custom Microsoft authorization URL (if needed) | Not set |
+| `POCKETBASE_AUTH_MICROSOFT_TOKEN_URL`     | Custom Microsoft token URL (if needed)         | Not set |
+| `POCKETBASE_AUTH_MICROSOFT_TENANT_ID`     | Microsoft Azure AD tenant ID                   | Not set |
+| `POCKETBASE_AUTH_MICROSOFT_GROUP_FILTER`  | Filter to apply when syncing Azure AD groups   | Not set |
+
+> In all other cases you need to create the teams yourself or request the feature.

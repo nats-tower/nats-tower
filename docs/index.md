@@ -1,9 +1,8 @@
 # NATS Tower
 
-NATS Tower is a simple multi tenant manager for NATS. It allows you to create tenants / accounts, manage users and manage permissions for those users.
+NATS Tower is a simple multi tenant manager for [NATS](https://nats.io). It allows you to create tenants / accounts, manage users and manage permissions for those users.
 
 > Still work in progress, but it should do what it is supposed to :)  
-> See [nats-tower.github.io/nats-tower/](nats-tower.github.io/nats-tower/) for more information
 
 ## Motivation
 
@@ -43,13 +42,7 @@ Each application can get its own account and you can manage the resources, strea
 
 ## Getting started
 
-To get started with NATS Tower, you can either run it as a standalone application or deploy it to your container runtime of choice. You can find detailed instructions in the [documentation](nats-tower.github.io/nats-tower/).
-
-`docker run -p 8090:8090 ghcr.io/nats-tower/nats-tower:main`
-
-Next, open your browser and navigate to [http://localhost:8090](http://localhost:8090) to access the NATS Tower interface.
-
-> The default username is `user@test.org` and the default password is `testtest`.
+See [here](#getting-started) to get started with NATS Tower.
 
 ### Bootstrap a NATS installation
 
