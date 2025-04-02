@@ -1,6 +1,6 @@
 
 # build the frontend
-FROM node:20.19.0-alpine3.21 AS frontendbuilder
+FROM node:23.11.0-alpine3.21 AS frontendbuilder
 
 WORKDIR /app
 
