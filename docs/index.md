@@ -42,7 +42,7 @@ Each application can get its own account and you can manage the resources, strea
 
 ## Getting started
 
-See [here](#getting-started) to get started with NATS Tower.
+See [here](./getting_started/index.md) to get started with NATS Tower.
 
 ### Bootstrap a NATS installation
 
