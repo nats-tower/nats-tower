@@ -14,26 +14,17 @@
 package stree
 
 // Node with 16 children
+// Order of struct fields for best memory alignment (as per govet/fieldalignment)
 type node16 struct {
-	meta
 	child [16]node
-	key   [16]byte
+	meta
+	key [16]byte
 }
 
 func newNode16(prefix []byte) *node16 {
 	nn := &node16{}
 	nn.setPrefix(prefix)
 	return nn
-}
-
-func (n *node16) isLeaf() bool { return false }
-func (n *node16) base() *meta  { return &n.meta }
-
-func (n *node16) setPrefix(pre []byte) {
-	n.prefixLen = uint16(min(len(pre), maxPrefixLen))
-	for i := uint16(0); i < n.prefixLen; i++ {
-		n.prefix[i] = pre[i]
-	}
 }
 
 // Currently we do not keep node16 sorted or use bitfields for traversal so just add to the end.
@@ -47,9 +38,6 @@ func (n *node16) addChild(c byte, nn node) {
 	n.size++
 }
 
-func (n *node16) numChildren() uint16 { return n.size }
-func (n *node16) path() []byte        { return n.prefix[:n.prefixLen] }
-
 func (n *node16) findChild(c byte) *node {
 	for i := uint16(0); i < n.size; i++ {
 		if n.key[i] == c {
@@ -62,7 +50,7 @@ func (n *node16) findChild(c byte) *node {
 func (n *node16) isFull() bool { return n.size >= 16 }
 
 func (n *node16) grow() node {
-	nn := newNode256(n.prefix[:n.prefixLen])
+	nn := newNode48(n.prefix)
 	for i := 0; i < 16; i++ {
 		nn.addChild(n.key[i], n.child[i])
 	}
@@ -91,19 +79,14 @@ func (n *node16) deleteChild(c byte) {
 
 // Shrink if needed and return new node, otherwise return nil.
 func (n *node16) shrink() node {
-	if n.size > 4 {
+	if n.size > 10 {
 		return nil
 	}
-	nn := newNode4(nil)
+	nn := newNode10(nil)
 	for i := uint16(0); i < n.size; i++ {
 		nn.addChild(n.key[i], n.child[i])
 	}
 	return nn
-}
-
-// Will match parts against our prefix.no
-func (n *node16) matchParts(parts [][]byte) ([][]byte, bool) {
-	return matchParts(parts, n.prefix[:n.prefixLen])
 }
 
 // Iterate over all children calling func f.

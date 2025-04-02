@@ -14,9 +14,10 @@
 package stree
 
 // Node with 256 children
+// Order of struct fields for best memory alignment (as per govet/fieldalignment)
 type node256 struct {
-	meta
 	child [256]node
+	meta
 }
 
 func newNode256(prefix []byte) *node256 {
@@ -25,23 +26,10 @@ func newNode256(prefix []byte) *node256 {
 	return nn
 }
 
-func (n *node256) isLeaf() bool { return false }
-func (n *node256) base() *meta  { return &n.meta }
-
-func (n *node256) setPrefix(pre []byte) {
-	n.prefixLen = uint16(min(len(pre), maxPrefixLen))
-	for i := uint16(0); i < n.prefixLen; i++ {
-		n.prefix[i] = pre[i]
-	}
-}
-
 func (n *node256) addChild(c byte, nn node) {
 	n.child[c] = nn
 	n.size++
 }
-
-func (n *node256) numChildren() uint16 { return n.size }
-func (n *node256) path() []byte        { return n.prefix[:n.prefixLen] }
 
 func (n *node256) findChild(c byte) *node {
 	if n.child[c] != nil {
@@ -63,21 +51,16 @@ func (n *node256) deleteChild(c byte) {
 
 // Shrink if needed and return new node, otherwise return nil.
 func (n *node256) shrink() node {
-	if n.size > 16 {
+	if n.size > 48 {
 		return nil
 	}
-	nn := newNode16(nil)
+	nn := newNode48(nil)
 	for c, child := range n.child {
 		if child != nil {
 			nn.addChild(byte(c), n.child[c])
 		}
 	}
 	return nn
-}
-
-// Will match parts against our prefix.
-func (n *node256) matchParts(parts [][]byte) ([][]byte, bool) {
-	return matchParts(parts, n.prefix[:n.prefixLen])
 }
 
 // Iterate over all children calling func f.

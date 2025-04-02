@@ -1,4 +1,4 @@
-// Copyright 2012-2019 The NATS Authors
+// Copyright 2012-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,7 +12,6 @@
 // limitations under the License.
 
 //go:build !windows && !wasm
-// +build !windows,!wasm
 
 package server
 
@@ -51,6 +50,7 @@ func (s *Server) handleSignals() {
 				switch sig {
 				case syscall.SIGINT:
 					s.Shutdown()
+					s.WaitForShutdown()
 					os.Exit(0)
 				case syscall.SIGTERM:
 					// Shutdown unless graceful shutdown already in progress.
@@ -60,7 +60,8 @@ func (s *Server) handleSignals() {
 
 					if !ldm {
 						s.Shutdown()
-						os.Exit(1)
+						s.WaitForShutdown()
+						os.Exit(0)
 					}
 				case syscall.SIGUSR1:
 					// File log re-open for rotating file logs.
