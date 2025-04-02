@@ -38,7 +38,7 @@ func (t *SubjectTree[T]) dump(w io.Writer, n node, depth int) {
 	} else {
 		// We are a node type here, grab meta portion.
 		bn := n.base()
-		fmt.Fprintf(w, "%s %s Prefix: %q\n", dumpPre(depth), n.kind(), bn.prefix[:bn.prefixLen])
+		fmt.Fprintf(w, "%s %s Prefix: %q\n", dumpPre(depth), n.kind(), bn.prefix)
 		depth++
 		n.iter(func(n node) bool {
 			t.dump(w, n, depth)
@@ -50,7 +50,9 @@ func (t *SubjectTree[T]) dump(w io.Writer, n node, depth int) {
 // For individual node/leaf dumps.
 func (n *leaf[T]) kind() string { return "LEAF" }
 func (n *node4) kind() string   { return "NODE4" }
+func (n *node10) kind() string  { return "NODE10" }
 func (n *node16) kind() string  { return "NODE16" }
+func (n *node48) kind() string  { return "NODE48" }
 func (n *node256) kind() string { return "NODE256" }
 
 // Calculates the indendation, etc.

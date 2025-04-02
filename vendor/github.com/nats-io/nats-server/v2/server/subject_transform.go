@@ -1,4 +1,4 @@
-// Copyright 2023 The NATS Authors
+// Copyright 2023-2024 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,6 +31,8 @@ var (
 	sliceFromLeftMappingFunctionRegEx  = regexp.MustCompile(`{{\s*[sS]lice[fF]rom[lL]eft\s*\((.*)\)\s*}}`)
 	sliceFromRightMappingFunctionRegEx = regexp.MustCompile(`{{\s*[sS]lice[fF]rom[rR]ight\s*\((.*)\)\s*}}`)
 	splitMappingFunctionRegEx          = regexp.MustCompile(`{{\s*[sS]plit\s*\((.*)\)\s*}}`)
+	leftMappingFunctionRegEx           = regexp.MustCompile(`{{\s*[lL]eft\s*\((.*)\)\s*}}`)
+	rightMappingFunctionRegEx          = regexp.MustCompile(`{{\s*[rR]ight\s*\((.*)\)\s*}}`)
 )
 
 // Enum for the subject mapping subjectTransform function types
@@ -44,6 +46,8 @@ const (
 	SliceFromLeft
 	SliceFromRight
 	Split
+	Left
+	Right
 )
 
 // Transforms for arbitrarily mapping subjects from one to another for maps, tees and filters.
@@ -297,6 +301,18 @@ func indexPlaceHolders(token string) (int16, []int, int32, string, error) {
 				return transformIndexIntArgsHelper(token, args, SliceFromRight)
 			}
 
+			// Right(token, length)
+			args = getMappingFunctionArgs(rightMappingFunctionRegEx, token)
+			if args != nil {
+				return transformIndexIntArgsHelper(token, args, Right)
+			}
+
+			// Left(token, length)
+			args = getMappingFunctionArgs(leftMappingFunctionRegEx, token)
+			if args != nil {
+				return transformIndexIntArgsHelper(token, args, Left)
+			}
+
 			// split(token, deliminator)
 			args = getMappingFunctionArgs(splitMappingFunctionRegEx, token)
 			if args != nil {
@@ -443,7 +459,16 @@ func (tr *subjectTransform) TransformTokenizedSubject(tokens []string) string {
 				}
 				b.WriteString(tr.getHashPartition(keyForHashing, int(tr.dtokmfintargs[i])))
 			case Wildcard: // simple substitution
-				b.WriteString(tokens[tr.dtokmftokindexesargs[i][0]])
+				switch {
+				case len(tr.dtokmftokindexesargs) < i:
+					break
+				case len(tr.dtokmftokindexesargs[i]) < 1:
+					break
+				case len(tokens) <= tr.dtokmftokindexesargs[i][0]:
+					break
+				default:
+					b.WriteString(tokens[tr.dtokmftokindexesargs[i][0]])
+				}
 			case SplitFromLeft:
 				sourceToken := tokens[tr.dtokmftokindexesargs[i][0]]
 				sourceTokenLen := len(sourceToken)
@@ -514,6 +539,24 @@ func (tr *subjectTransform) TransformTokenizedSubject(tokens []string) string {
 					if j < len(splits)-1 && splits[j+1] != _EMPTY_ && !(j == 0 && split == _EMPTY_) {
 						b.WriteString(tsep)
 					}
+				}
+			case Left:
+				sourceToken := tokens[tr.dtokmftokindexesargs[i][0]]
+				sourceTokenLen := len(sourceToken)
+				sliceSize := int(tr.dtokmfintargs[i])
+				if sliceSize > 0 && sliceSize < sourceTokenLen {
+					b.WriteString(sourceToken[0:sliceSize])
+				} else { // too small to slice at the requested size: don't slice
+					b.WriteString(sourceToken)
+				}
+			case Right:
+				sourceToken := tokens[tr.dtokmftokindexesargs[i][0]]
+				sourceTokenLen := len(sourceToken)
+				sliceSize := int(tr.dtokmfintargs[i])
+				if sliceSize > 0 && sliceSize < sourceTokenLen {
+					b.WriteString(sourceToken[sourceTokenLen-sliceSize : sourceTokenLen])
+				} else { // too small to slice at the requested size: don't slice
+					b.WriteString(sourceToken)
 				}
 			}
 		}
