@@ -238,19 +238,26 @@ func (m *NATSAuthModule) publishAccountRecordRemoval(ctx context.Context, dao co
 	claim := jwt.NewGenericClaims(operatorRecord.GetString("public_key"))
 	claim.Data["accounts"] = []string{record.GetString("public_key")}
 
-	operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("sign_seed")))
+	// need to sign the claim with the operator's seed NOT the signing seed
+	// issuer and subject have to be the same => during encoding, the issuer is set to the public key which is "public_key"
+	operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("seed")))
 	if err != nil {
 		return err
 	}
 	pruneJwt, err := claim.Encode(operatorKP)
 	if err != nil {
-		logger.ErrorContext(ctx, "Could not connect to operator", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Could not encode JWT", slog.String("error", err.Error()))
 		return err
 	}
-	_, err = nc.Request("$SYS.REQ.CLAIMS.DELETE", []byte(pruneJwt), 5*time.Second)
+	responseMessage, err := nc.Request("$SYS.REQ.CLAIMS.DELETE", []byte(pruneJwt), 5*time.Second)
 	if err != nil {
 		logger.ErrorContext(ctx, "Could not delete account from operator", slog.String("error", err.Error()))
 		return err
 	}
+	logger.InfoContext(ctx, "Account removal response",
+		slog.String("response", string(responseMessage.Data)),
+		slog.String("jwt", pruneJwt),
+		slog.String("operator_public_key", operatorRecord.GetString("public_key")),
+		slog.String("account_public_key", record.GetString("public_key")))
 	return nil
 }

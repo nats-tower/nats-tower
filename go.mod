@@ -5,14 +5,14 @@ go 1.23.0
 toolchain go1.23.5
 
 require (
-	github.com/a-h/templ v0.3.833
+	github.com/google/uuid v1.6.0
 	github.com/nats-io/jsm.go v0.1.1
 	github.com/nats-io/jwt/v2 v2.5.5
 	github.com/nats-io/nats-server/v2 v2.10.12
 	github.com/nats-io/nats.go v1.33.1
 	github.com/nats-io/nkeys v0.4.7
 	github.com/pocketbase/dbx v1.11.0
-	github.com/pocketbase/pocketbase v0.26.1
+	github.com/pocketbase/pocketbase v0.26.4
 )
 
 require (
@@ -25,8 +25,7 @@ require (
 	github.com/ganigeorgiev/fexpr v0.4.1 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
@@ -51,5 +50,5 @@ require (
 	modernc.org/libc v1.61.13 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.8.2 // indirect
-	modernc.org/sqlite v1.36.1 // indirect
+	modernc.org/sqlite v1.36.2 // indirect
 )

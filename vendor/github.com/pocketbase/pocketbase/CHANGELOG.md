@@ -1,3 +1,22 @@
+## v0.26.4
+
+- Fixed `RecordErrorEvent.Error` and `CollectionErrorEvent.Error` sync with `ModelErrorEvent.Error` ([#6639](https://github.com/pocketbase/pocketbase/issues/6639)).
+
+- Fixed logs details clipboard copy.
+
+- Updated `modernc.org/sqlite` to 1.36.2.
+
+
+## v0.26.3
+
+- Fixed and normalized logs error serialization across common types for more consistent logs error output ([#6631](https://github.com/pocketbase/pocketbase/issues/6631)).
+
+
+## v0.26.2
+
+- Updated `golang-jwt/jwt` dependency because it comes with a [minor security fix](https://github.com/golang-jwt/jwt/security/advisories/GHSA-mh63-6h87-95cp).
+
+
 ## v0.26.1
 
 - Removed the wrapping of `io.EOF` error when reading files since currently `io.ReadAll` doesn't check for wrapped errors ([#6600](https://github.com/pocketbase/pocketbase/issues/6600)).

@@ -34,6 +34,62 @@
       }
     },
     {
+      "label": "run nats-server-west",
+      "command": "nats-server",
+      "args": [
+        "-c",
+        "supercluster/west.conf"
+      ],
+      "group": "build",
+      "type": "shell",
+      "isBackground": true,
+      "options": {
+        "env": {}
+      }
+    },
+    {
+      "label": "run nats-server-east",
+      "command": "nats-server",
+      "args": [
+        "-c",
+        "supercluster/east.conf"
+      ],
+      "group": "build",
+      "type": "shell",
+      "isBackground": true,
+      "options": {
+        "env": {}
+      }
+    },
+    {
+      "label": "run nats-server-central",
+      "command": "nats-server",
+      "args": [
+        "-c",
+        "supercluster/central.conf"
+      ],
+      "group": "build",
+      "type": "shell",
+      "isBackground": true,
+      "options": {
+        "env": {}
+      }
+    },
+    {
+      "label": "run nats-server-west",
+      "command": "nats-server",
+      "args": [
+        "-c",
+        "supercluster/west.conf"
+      ],
+      "group": "build",
+      "type": "shell",
+      "isBackground": true,
+      "options": {
+        "env": {}
+      }
+    },
+    {
       "label": "run frontend",
       "command": "pnpm",
       "args": [
@@ -52,6 +108,18 @@
       "dependsOn": [
         "run server",
         "run nats-server",
+        "run frontend"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "run dev environment with supercluster",
+      "dependsOn": [
+        "run server",
+        "run nats-server",
+        "run nats-server-central",
+        "run nats-server-west",
+        "run nats-server-east",
         "run frontend"
       ],
       "problemMatcher": []

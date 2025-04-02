@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, InfoIcon } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
 
 import {
 	DropdownMenu,
@@ -38,6 +38,8 @@ function getActiveInstallation(
 	);
 }
 
+const svgBlack = "rgb(0%,0%,0%)";
+
 export function InstallationSwitcher() {
 	const [dialogCreateInstallationOpen, setDialogCreateInstallationOpen] =
 		useState(false);
@@ -66,8 +68,84 @@ export function InstallationSwitcher() {
 							className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
 						>
 							<div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-								{/* TODO: Replace with actual icon */}
-								<InfoIcon className="size-4" />
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									xmlnsXlink="http://www.w3.org/1999/xlink"
+									width="255px"
+									height="255px"
+									viewBox="0 0 255 255"
+									version="1.1"
+									aria-labelledby="installationIconTitle"
+								>
+									<title id="installationIconTitle">Installation Icon</title>
+									<g id="surface1">
+										<path
+											style={{
+												fill: "rgb(100%,100%,100%)",
+												strokeWidth: 1,
+												strokeLinecap: "round",
+												strokeLinejoin: "round",
+												stroke: svgBlack,
+												strokeOpacity: 1,
+												strokeMiterlimit: 4,
+											}}
+											d="M 11.007353 12.007353 C 11.007353 12.553309 11.454044 13 12 13 C 12.545956 13 12.992647 12.553309 12.992647 12.007353 C 12.992647 11.444853 12.545956 10.998162 12 10.998162 C 11.454044 10.998162 11.007353 11.444853 11.007353 12.007353 "
+											transform="matrix(7,0,0,7,45,50)"
+										/>
+										<path
+											style={{
+												fill: "none",
+												strokeWidth: 1,
+												strokeLinecap: "round",
+												strokeLinejoin: "round",
+												stroke: svgBlack,
+												strokeOpacity: 1,
+												strokeMiterlimit: 4,
+											}}
+											d="M 16.615809 13.915882 C 17.492647 11.831324 16.847426 9.415882 15.044118 8.042721 C 13.257353 6.653015 10.742647 6.653015 8.955882 8.042721 C 7.152574 9.415882 6.507353 11.831324 7.384191 13.915882 "
+											transform="matrix(7,0,0,7,45,50)"
+										/>
+										<path
+											style={{
+												fill: "none",
+												strokeWidth: 1,
+												strokeLinecap: "round",
+												strokeLinejoin: "round",
+												stroke: svgBlack,
+												strokeOpacity: 1,
+												strokeMiterlimit: 4,
+											}}
+											d="M 20.305147 15.466103 C 21.876838 11.710588 20.71875 7.359485 17.476103 4.877867 C 14.25 2.379706 9.75 2.379706 6.507353 4.877867 C 3.28125 7.359485 2.123162 11.710588 3.694853 15.466103 "
+											transform="matrix(7,0,0,7,45,50)"
+										/>
+										<path
+											style={{
+												fill: "none",
+												strokeWidth: 1,
+												strokeLinecap: "round",
+												strokeLinejoin: "round",
+												stroke: svgBlack,
+												strokeOpacity: 1,
+												strokeMiterlimit: 4,
+											}}
+											d="M 9.005515 21.005823 L 12 12.005823 L 14.994485 21.005823 "
+											transform="matrix(7,0,0,7,45,50)"
+										/>
+										<path
+											style={{
+												fill: "none",
+												strokeWidth: 1,
+												strokeLinecap: "round",
+												strokeLinejoin: "round",
+												stroke: svgBlack,
+												strokeOpacity: 1,
+												strokeMiterlimit: 4,
+											}}
+											d="M 9.998162 18.993975 L 14.001838 18.993975 "
+											transform="matrix(7,0,0,7,45,50)"
+										/>
+									</g>
+								</svg>
 							</div>
 							<div className="grid flex-1 text-left text-sm leading-tight">
 								<span className="truncate font-semibold">
@@ -110,7 +188,7 @@ export function InstallationSwitcher() {
 								<DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
 							</DropdownMenuItem>
 						))}
-						
+
 						<DropdownMenuSeparator />
 
 						<Dialog
