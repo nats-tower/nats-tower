@@ -38,7 +38,7 @@ Steps to add a new NATS installation:
 
 1. Login as an admin at `http://localhost:8099/`. (Default admin: `admin@test.org`, password: `testtest`)
 2. Create the NATS installation in NATS Tower by clicking on the `+ Add installation` button.
-3. Set the URL to `nats://localhost:4222` and give it a description and click on `Add installation`.
+3. Set the URL to `nats://localhost:4222` and give it a description and click on `Add installation`. (If using docker, please use the IP of your host instead of `localhost`)
 4. Select the newly created NATS installation and click on the `Settings` icon next to the URLs.
 5. Click on `Copy as NATS Config`.
 6. Switch to the console and create a new file called `operator.conf` and paste the copied content into it.
