@@ -55,8 +55,8 @@ github.com/minio/highwayhash
 # github.com/nats-io/jsm.go v0.1.1
 ## explicit; go 1.21
 github.com/nats-io/jsm.go/natscontext
-# github.com/nats-io/jwt/v2 v2.5.5
-## explicit; go 1.18
+# github.com/nats-io/jwt/v2 v2.7.3
+## explicit; go 1.22
 github.com/nats-io/jwt/v2
 # github.com/nats-io/nats-server/v2 v2.10.12
 ## explicit; go 1.20
