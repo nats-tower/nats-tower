@@ -58,7 +58,7 @@ Each application can get its own account and you can manage the resources, strea
 
 ## Getting started
 
-To get started with NATS Tower, you can either run it as a standalone application or deploy it to your container runtime of choice. You can find detailed instructions in the [documentation](nats-tower.github.io/nats-tower/).
+To get started with NATS Tower, you can either run it as a standalone application or deploy it to your container runtime of choice. You can find detailed instructions in the [documentation](https://nats-tower.github.io/nats-tower/).
 
 `docker run -p 8099:8099 ghcr.io/nats-tower/nats-tower:main serve --http 0.0.0.0:8099`
 
