@@ -38,7 +38,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.2",
-    "sonner": "^2.0.1",
+    "sonner": "^2.0.3",
     "swr": "^2.3.3",
     "tailwind-merge": "^2.5.3",
     "tailwindcss-animate": "^1.0.7",
