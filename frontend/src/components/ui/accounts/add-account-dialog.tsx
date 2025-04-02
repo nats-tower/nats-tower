@@ -248,17 +248,7 @@ export function AddAccountDialogContent({ setDialogCreateAccountOpen, installati
                                         maxCount={3}
                                     />
                                     <FormDescription>
-                                        You can configure your limits{" "}
-                                        <Link
-                                            className="text-blue-500"
-                                            to="/installations/$installationId/limits"
-                                            params={{
-                                                installationId: installationData.id,
-                                            }}
-                                        >
-                                            here
-                                        </Link>
-                                        .
+                                        Choose which teams should have access to this account. If no teams are selected, all teams will have access.
                                     </FormDescription>
                                     <FormMessage />
                                 </FormItem>

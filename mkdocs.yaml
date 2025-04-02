@@ -12,6 +12,7 @@ nav:
     - 'Configuration': 'admin_doc/configuration/index.md'
     - 'User management': 'admin_doc/user_management/index.md'
     - 'Operations': 'admin_doc/operations/index.md'
+  - 'UI screenshots': 'ui/index.md'
 
 theme:
   name: material

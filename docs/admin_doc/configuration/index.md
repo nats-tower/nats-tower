@@ -19,7 +19,6 @@ NATS Tower supports SSO through the [Pocketbase](https://pocketbase.io/) admin i
 
 Additionally, for Microsoft Azure AD, you can enable a automatic group to teams sync by setting the following environment variables:
 
-| Variable                 | Description                             | Default          |
 | Variable                                  | Description                                    | Default |
 | ----------------------------------------- | ---------------------------------------------- | ------- |
 | `POCKETBASE_AUTH_MICROSOFT_ENABLED`       | Enable Microsoft Azure AD authentication       | `FALSE` |
@@ -30,4 +29,4 @@ Additionally, for Microsoft Azure AD, you can enable a automatic group to teams 
 | `POCKETBASE_AUTH_MICROSOFT_TENANT_ID`     | Microsoft Azure AD tenant ID                   | Not set |
 | `POCKETBASE_AUTH_MICROSOFT_GROUP_FILTER`  | Filter to apply when syncing Azure AD groups   | Not set |
 
-> In all other cases you need to create the teams yourself or request the feature.
+> In all other cases of SSO you need to create the teams yourself or request the feature to sync teams.

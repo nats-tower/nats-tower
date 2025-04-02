@@ -40,20 +40,46 @@ Each application can get its own account and you can manage the resources, strea
 - Web based UI
 - k8s operator (soon)
 
+## UI screenshots
+
+![installations](./docs/images/installations.png)
+
+![dashboard](./docs/images/dashboard.png)
+
+![limits](./docs/images/limits.png)
+
+![accounts](./docs/images/accounts.png)
+
+![add-account](./docs/images/add-account.png)
+
+![users](./docs/images/users.png)
+
+![credentials](./docs/images/credentials.png)
+
 ## Getting started
 
 To get started with NATS Tower, you can either run it as a standalone application or deploy it to your container runtime of choice. You can find detailed instructions in the [documentation](nats-tower.github.io/nats-tower/).
 
-`docker run -p 8090:8090 ghcr.io/nats-tower/nats-tower:main`
+`docker run -p 8099:8099 ghcr.io/nats-tower/nats-tower:main serve --http 0.0.0.0:8099`
 
-Next, open your browser and navigate to [http://localhost:8090](http://localhost:8090) to access the NATS Tower interface.
+Next, open your browser and navigate to [http://localhost:8099](http://localhost:8099) to access the NATS Tower interface.
 
-> The default username is `user@test.org` and the default password is `testtest`.
+> The default admin is `admin@test.org` and the default password is `testtest`.
 
-### Bootstrap a NATS installation
+Navigate to the `http://localhost:8099/_/` to access the admin interface.
 
-To add a new NATS installation, you can add it to NATS Tower by clicking on the `Add` button in the top right corner. Fill in the URLs and give it a description.
+Default user credentials:
+    
+- The default user is `user@test.org` and the default password is `testtest`.
 
-Navigate to your newly created NATS installation and click on the `Key` button next to the URLs. This will open up a dialog showing the required NATS Server settings that you need to add to your NATS Server configuration.
+## Acknowledgements
 
-> Currently there is no automatic import of existing users & permissions. This is a feature that is planned for the future.
+- [Pocketbase](https://pocketbase.io/) for the awesome base
+- [NATS](https://nats.io/) for the awesome messaging system
+- [Synadia](https://synadia.com/) for maintaining NATS and the NATS ecosystem (check out their managed NATS offering! or use NATS Tower ;))
+
+## Contributing
+
+If you want to contribute to NATS Tower, please fork the repository and create a pull request. We welcome any contributions, whether it's bug fixes, new features or documentation improvements.
+
+Also, please feel free to open issues for any bugs or feature requests you may have. We will do our best to address them in a timely manner. Thank you for your interest in contributing!
