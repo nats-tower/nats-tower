@@ -56,8 +56,5 @@ Navigate to your newly created NATS installation and click on the `Key` button n
 
 - Stream/KV creation via UI
 - Import/Export via UI
-- Teams / Groups of users with mapping to accounts
-- AzureAD Group Sync
-- Resource profiles for accounts (e.g. basic, huuuuge, etc)
 - Graph visualization of Import / Export relationships
 - k8s operator
