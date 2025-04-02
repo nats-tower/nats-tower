@@ -10,7 +10,7 @@ require (
 	github.com/nats-io/jwt/v2 v2.5.5
 	github.com/nats-io/nats-server/v2 v2.10.12
 	github.com/nats-io/nats.go v1.40.1
-	github.com/nats-io/nkeys v0.4.9
+	github.com/nats-io/nkeys v0.4.10
 	github.com/pocketbase/dbx v1.11.0
 	github.com/pocketbase/pocketbase v0.26.4
 )
