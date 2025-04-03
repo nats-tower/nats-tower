@@ -15,7 +15,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 export default function Layout({ children }: PropsWithChildren) {
 	const { resolvedLocation } = useRouterState();
 
-	const navInfo = getNavInfo(resolvedLocation.href);
+	const navInfo = getNavInfo(resolvedLocation?.href);
 
 	return (
 		<SidebarProvider>
@@ -31,7 +31,7 @@ export default function Layout({ children }: PropsWithChildren) {
 									<BreadcrumbItem key={breadcrumb.name}>
 										{index > 0 && <BreadcrumbSeparator />}
 										<BreadcrumbLink asChild>
-											<Link href={breadcrumb.url}>{breadcrumb.name}</Link>
+											<Link to={breadcrumb.url}>{breadcrumb.name}</Link>
 										</BreadcrumbLink>
 									</BreadcrumbItem>
 								))}

@@ -52,7 +52,7 @@ export function InstallationSwitcher() {
 	if (error) return <div>failed to load</div>;
 	if (isLoading) return <div>loading...</div>;
 
-	if (!resolvedLocation.href.includes("/installations")) {
+	if (!resolvedLocation || !resolvedLocation.href.includes("/installations")) {
 		return null;
 	}
 

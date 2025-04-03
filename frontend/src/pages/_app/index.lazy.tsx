@@ -12,5 +12,5 @@ function Home() {
     return <Navigate to="/installations" />;
   }
 
-  return <Navigate to={`/installations/${installation.installationId}`} />;
+  return <Navigate to="/installations/$installationId" params={{ installationId: installation.installationId }} />;
 }

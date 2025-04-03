@@ -31,7 +31,13 @@ function resolveBreadcrumb(
 	return resolvedBreadcrumb.join("/");
 }
 
-export function getNavInfo(resolvedHref: string) {
+export function getNavInfo(resolvedHref: string | undefined) {
+	if (!resolvedHref) {
+		return {
+			breadcrumbs: [],
+			items: [],
+		};
+	}
 
 	if (resolvedHref === "/installations" || resolvedHref === "/installations/") {
 		return {
@@ -206,7 +212,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				<InstallationSwitcher />
 			</SidebarHeader>
 			<SidebarContent>
-				<NavMain items={getNavInfo(resolvedLocation.href).items} />
+				<NavMain items={getNavInfo(resolvedLocation?.href).items} />
 			</SidebarContent>
 			<SidebarFooter>
 				<NavUser />
