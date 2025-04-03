@@ -126,7 +126,7 @@ github.com/ncruces/go-strftime
 # github.com/pocketbase/dbx v1.11.0
 ## explicit; go 1.13
 github.com/pocketbase/dbx
-# github.com/pocketbase/pocketbase v0.26.4
+# github.com/pocketbase/pocketbase v0.26.6
 ## explicit; go 1.23.0
 github.com/pocketbase/pocketbase
 github.com/pocketbase/pocketbase/apis
@@ -289,7 +289,7 @@ modernc.org/mathutil
 # modernc.org/memory v1.8.2
 ## explicit; go 1.21
 modernc.org/memory
-# modernc.org/sqlite v1.36.2
+# modernc.org/sqlite v1.36.3
 ## explicit; go 1.23.0
 modernc.org/sqlite
 modernc.org/sqlite/lib
