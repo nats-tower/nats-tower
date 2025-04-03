@@ -2,6 +2,11 @@ on:
     push:
       branches:
         - 'main'
+      paths: 
+        - 'docs/**'
+        - '.github/workflows/docs.yaml'
+        - 'mkdocs.yaml'
+
 
 permissions:
   contents: write
