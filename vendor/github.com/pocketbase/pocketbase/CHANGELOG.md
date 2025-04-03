@@ -1,8 +1,20 @@
+## v0.26.6
+
+- Allow OIDC `email_verified` to be int or boolean string since some OIDC providers like AWS Cognito has non-standard userinfo response ([#6657](https://github.com/pocketbase/pocketbase/pull/6657)).
+
+- Updated `modernc.org/sqlite` to 1.36.3.
+
+
+## v0.26.5
+
+- Fixed canonical URI parts escaping when generating the S3 request signature ([#6654](https://github.com/pocketbase/pocketbase/issues/6654)).
+
+
 ## v0.26.4
 
 - Fixed `RecordErrorEvent.Error` and `CollectionErrorEvent.Error` sync with `ModelErrorEvent.Error` ([#6639](https://github.com/pocketbase/pocketbase/issues/6639)).
 
-- Fixed logs details clipboard copy.
+- Fixed logs details copy to clipboard action.
 
 - Updated `modernc.org/sqlite` to 1.36.2.
 

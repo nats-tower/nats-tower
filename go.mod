@@ -11,7 +11,7 @@ require (
 	github.com/nats-io/nats.go v1.40.1
 	github.com/nats-io/nkeys v0.4.10
 	github.com/pocketbase/dbx v1.11.0
-	github.com/pocketbase/pocketbase v0.26.4
+	github.com/pocketbase/pocketbase v0.26.6
 )
 
 require (
@@ -52,5 +52,5 @@ require (
 	modernc.org/libc v1.61.13 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.8.2 // indirect
-	modernc.org/sqlite v1.36.2 // indirect
+	modernc.org/sqlite v1.36.3 // indirect
 )
