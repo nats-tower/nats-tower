@@ -40,6 +40,10 @@ Each application can get its own account and you can manage the resources, strea
 - Web based UI
 - k8s operator (soon)
 
+## UI screenshots
+
+See [here](./ui/index.md) for a collection of screenshots of the UI.
+
 ## Getting started
 
 See [here](./getting_started/index.md) to get started with NATS Tower.
