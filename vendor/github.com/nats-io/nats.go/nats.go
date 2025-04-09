@@ -47,7 +47,7 @@ import (
 
 // Default Constants
 const (
-	Version                   = "1.40.1"
+	Version                   = "1.41.0"
 	DefaultURL                = "nats://127.0.0.1:4222"
 	DefaultPort               = 4222
 	DefaultMaxReconnect       = 60
@@ -2224,6 +2224,7 @@ func (nc *Conn) ForceReconnect() error {
 		// even if we're in the middle of a backoff
 		if nc.rqch != nil {
 			close(nc.rqch)
+			nc.rqch = nil
 		}
 		return nil
 	}
@@ -2843,6 +2844,16 @@ func (nc *Conn) doReconnect(err error, forceReconnect bool) {
 	var rt *time.Timer
 	// Channel used to kick routine out of sleep when conn is closed.
 	rqch := nc.rqch
+
+	// if rqch is nil, we need to set it up to signal
+	// the reconnect loop to reconnect immediately
+	// this means that `ForceReconnect` was called
+	// before entering doReconnect
+	if rqch == nil {
+		rqch = make(chan struct{})
+		close(rqch)
+	}
+
 	// Counter that is increased when the whole list of servers has been tried.
 	var wlf int
 
@@ -4600,6 +4611,8 @@ func (s *Subscription) StatusChanged(statuses ...SubStatus) <-chan SubStatus {
 		statuses = []SubStatus{SubscriptionActive, SubscriptionDraining, SubscriptionClosed, SubscriptionSlowConsumer}
 	}
 	ch := make(chan SubStatus, 10)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, status := range statuses {
 		s.registerStatusChangeListener(status, ch)
 		// initial status
@@ -4613,9 +4626,8 @@ func (s *Subscription) StatusChanged(statuses ...SubStatus) <-chan SubStatus {
 // registerStatusChangeListener registers a channel waiting for a specific status change event.
 // Status change events are non-blocking - if no receiver is waiting for the status change,
 // it will not be sent on the channel. Closed channels are ignored.
+// Lock should be held entering.
 func (s *Subscription) registerStatusChangeListener(status SubStatus, ch chan SubStatus) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.statListeners == nil {
 		s.statListeners = make(map[chan SubStatus][]SubStatus)
 	}
@@ -5893,6 +5905,8 @@ func (nc *Conn) StatusChanged(statuses ...Status) chan Status {
 		statuses = []Status{CONNECTED, RECONNECTING, DISCONNECTED, CLOSED}
 	}
 	ch := make(chan Status, 10)
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
 	for _, s := range statuses {
 		nc.registerStatusChangeListener(s, ch)
 	}
@@ -5902,9 +5916,8 @@ func (nc *Conn) StatusChanged(statuses ...Status) chan Status {
 // registerStatusChangeListener registers a channel waiting for a specific status change event.
 // Status change events are non-blocking - if no receiver is waiting for the status change,
 // it will not be sent on the channel. Closed channels are ignored.
+// The lock should be held entering.
 func (nc *Conn) registerStatusChangeListener(status Status, ch chan Status) {
-	nc.mu.Lock()
-	defer nc.mu.Unlock()
 	if nc.statListeners == nil {
 		nc.statListeners = make(map[Status][]chan Status)
 	}
