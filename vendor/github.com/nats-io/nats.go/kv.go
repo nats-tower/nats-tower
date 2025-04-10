@@ -826,6 +826,8 @@ func (kv *kvs) PurgeDeletes(opts ...PurgeOpt) error {
 			deleteMarkers = append(deleteMarkers, entry)
 		}
 	}
+	// Stop watcher here so as we purge we do not have the system continually updating numPending.
+	watcher.Stop()
 
 	var (
 		pr StreamPurgeRequest
@@ -1109,6 +1111,11 @@ func (kv *kvs) WatchFiltered(keys []string, opts ...WatchOpt) (KeyWatcher, error
 	}
 	// Set us up to close when the waitForMessages func returns.
 	sub.pDone = func(_ string) {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if w.initDoneTimer != nil {
+			w.initDoneTimer.Stop()
+		}
 		close(w.updates)
 	}
 
