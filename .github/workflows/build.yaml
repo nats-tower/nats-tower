@@ -37,31 +37,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-      - name: Build frontend
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/frontend.Dockerfile
-          tags: 'nats-tower-frontend:latest'
-          platforms: linux/amd64
-          outputs: type=docker,dest=/tmp/frontend.tar
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # Load the frontend image for use in backend build
-      - name: Load frontend image
-        run: |
-          docker load --input /tmp/frontend.tar
-          docker image ls
-
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/backend.Dockerfile
+          file: ./docker/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # include ,linux/arm64 for arm builds but github is soooo slow
           platforms: linux/amd64,linux/arm/v7,linux/arm64
-          cache-from: type=gha
