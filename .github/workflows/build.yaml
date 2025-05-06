@@ -37,11 +37,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
+      - name: Build frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/frontend.Dockerfile
+          tags: 'nats-tower-frontend:latest'
+          platforms: linux/amd64
+
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/Dockerfile
+          file: ./docker/backend.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
