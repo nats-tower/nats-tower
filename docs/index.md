@@ -4,6 +4,19 @@ NATS Tower is a simple multi tenant manager for [NATS](https://nats.io). It allo
 
 > Still work in progress, but it should do what it is supposed to :)  
 
+## Demo instance
+
+You can try out NATS Tower on the demo instance: [https://demo.nats-tower.com](https://demo.nats-tower.com).  
+You can login with GitHub or with one of the following credentials:
+- **Username**: `app-demo@nats-tower.com`
+- **Password**: `nats-tower`
+- **Username**: `data-demo@nats-tower.com`
+- **Password**: `nats-tower`
+
+You gain access to different NATS accounts if you use the different credentials. The demo instance is limited and will be reset regularly. Do not use it for production workloads. Any user data will be wiped in that process as well.
+
+You will only be able to access the demo instance as a "user" and not as an "admin". This means you will not be able to create new users or accounts. You can only manage your own account.
+
 ## Motivation
 
 As hosting NATS is "simple" and more and more applications hop on to NATS, it is getting more and more important to have a good way to manage tenants and users. NATS Tower aims to be a simple solution to this problem.

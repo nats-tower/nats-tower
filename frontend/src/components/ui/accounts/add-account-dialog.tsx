@@ -51,7 +51,7 @@ const FormSchema = z.object({
             required_error: "Please provide a description for the account.",
         })
         .min(1, "Description is required"),
-    limit: z.string().optional(),
+    limits: z.string().optional(),
     teams: z.array(z.string()).optional(),
 });
 
@@ -95,7 +95,7 @@ export function AddAccountDialogContent({ setDialogCreateAccountOpen, installati
 		await pb.collection<NatsAuthAccountsRecord>("nats_auth_accounts").create({
 			name: data.name,
 			description: data.description,
-			limit: data.limit,
+			limits: data.limits,
 			operator: installationData.id,
 			teams: data.teams,
 		});
@@ -182,7 +182,7 @@ export function AddAccountDialogContent({ setDialogCreateAccountOpen, installati
                     <div className="grid flex-1 gap-2">
                         <FormField
                             control={form.control}
-                            name="limit"
+                            name="limits"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Limit</FormLabel>
