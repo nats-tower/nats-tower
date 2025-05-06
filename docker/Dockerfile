@@ -9,21 +9,11 @@ COPY frontend/package.json frontend/yarn.lock* frontend/package-lock.json* front
 
 RUN ls
 
-RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile --no-optional; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  else echo "Lockfile not found." && exit 1; \
-  fi
+RUN corepack enable pnpm && pnpm i --frozen-lockfile --no-optional; 
 
 # The actual app code
 COPY frontend/ ./
-RUN \
-  if [ -f yarn.lock ]; then yarn run build --outDir /pb/pb_public; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build --outDir /pb/pb_public; \
-  elif [ -f package-lock.json ]; then npm run build --outDir /pb/pb_public; \
-  else echo "Lockfile not found." && exit 1; \
-  fi
+RUN corepack enable pnpm && pnpm run build --outDir /pb/pb_public;
 
 # build backend
 FROM golang:1.24-alpine AS build
