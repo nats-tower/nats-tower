@@ -9,7 +9,7 @@ COPY frontend/package.json frontend/yarn.lock* frontend/package-lock.json* front
 
 RUN ls
 
-RUN corepack enable pnpm && pnpm i --frozen-lockfile --no-optional; 
+RUN corepack enable pnpm && pnpm i --frozen-lockfile; 
 
 # The actual app code
 COPY frontend/ ./
