@@ -1,3 +1,70 @@
+## v0.27.2
+
+- Added workers pool when cascade deleting record files to minimize _"thread exhaustion"_ errors ([#6780](https://github.com/pocketbase/pocketbase/discussions/6780)).
+
+- Updated the `:excerpt` fields modifier to properly account for multibyte characters ([#6778](https://github.com/pocketbase/pocketbase/issues/6778)).
+
+- Use `rowid` as count column for non-view collections to minimize the need of having the id field in a covering index ([#6739](https://github.com/pocketbase/pocketbase/discussions/6739))
+
+
+## v0.27.1
+
+- Updated example `geoPoint` API preview body data.
+
+- Added JSVM `new GeoPointField({ ... })` constructor.
+
+- Added _partial_ WebP thumbs generation (_the thumbs will be stored as PNG_; [#6744](https://github.com/pocketbase/pocketbase/pull/6744)).
+
+- Updated npm dev dependencies.
+
+
+## v0.27.0
+
+- ⚠️ Moved the Create and Manage API rule checks out of the `OnRecordCreateRequest` hook finalizer, **aka. now all CRUD API rules are checked BEFORE triggering their corresponding `*Request` hook**.
+    This was done to minimize the confusion regarding the firing order of the request operations, making it more predictable and consistent with the other record List/View/Update/Delete request actions.
+    It could be a minor breaking change if you are relying on the old behavior and have a Go `tests.ApiScenario` that is testing a Create API rule failure and expect `OnRecordCreateRequest` to be fired. In that case for example you may have to update your test scenario like:
+    ```go
+    tests.ApiScenario{
+        Name:   "Example test that checks a Create API rule failure"
+        Method: http.MethodPost,
+        URL:    "/api/collections/example/records",
+        ...
+        // old:
+        ExpectedEvents:  map[string]int{
+            "*":                     0,
+            "OnRecordCreateRequest": 1,
+        },
+        // new:
+        ExpectedEvents:  map[string]int{"*": 0},
+    }
+    ```
+    If you are having difficulties adjusting your code, feel free to open a [Q&A discussion](https://github.com/pocketbase/pocketbase/discussions) with the failing/problematic code sample.
+
+- Added [new `geoPoint` field](https://pocketbase.io/docs/collections/#geopoint) for storing `{"lon":x,"lat":y}` geographic coordinates.
+    In addition, a new [`geoDistance(lonA, lotA, lonB, lotB)` function](htts://pocketbase.io/docs/api-rules-and-filters/#geodistancelona-lata-lonb-latb) was also implemented that could be used to apply an API rule or filter constraint based on the distance (in km) between 2 geo points.
+
+- Updated the `select` field UI to accommodate better larger lists and RTL languages ([#4674](https://github.com/pocketbase/pocketbase/issues/4674)).
+
+- Updated the mail attachments auto MIME type detection to use `gabriel-vasile/mimetype` for consistency and broader sniffing signatures support.
+
+- Forced `text/javascript` Content-Type when serving `.js`/`.mjs` collection uploaded files with the `/api/files/...` endpoint ([#6597](https://github.com/pocketbase/pocketbase/issues/6597)).
+
+- Added second optional JSVM `DateTime` constructor argument for specifying a default timezone as TZ identifier when parsing the date string as alternative to a fixed offset in order to better handle daylight saving time nuances ([#6688](https://github.com/pocketbase/pocketbase/discussions/6688)):
+    ```js
+    // the same as with CET offset: new DateTime("2025-10-26 03:00:00 +01:00")
+    new DateTime("2025-10-26 03:00:00", "Europe/Amsterdam") // 2025-10-26 02:00:00.000Z
+
+    // the same as with CEST offset: new DateTime("2025-10-26 01:00:00 +02:00")
+    new DateTime("2025-10-26 01:00:00", "Europe/Amsterdam") // 2025-10-25 23:00:00.000Z
+    ```
+
+- Soft-deprecated the `$http.send`'s `result.raw` field in favor of `result.body` that contains the response body as plain bytes slice to avoid the discrepancies between Go and the JSVM when casting binary data to string.
+
+- Updated `modernc.org/sqlite` to 1.37.0.
+
+- Other minor improvements (_removed the superuser fields from the auth record create/update body examples, allowed programmatically updating the auth record password from the create/update hooks, fixed collections import error response, etc._).
+
+
 ## v0.26.6
 
 - Allow OIDC `email_verified` to be int or boolean string since some OIDC providers like AWS Cognito has non-standard userinfo response ([#6657](https://github.com/pocketbase/pocketbase/pull/6657)).

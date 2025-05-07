@@ -21,6 +21,9 @@ import (
 	"github.com/pocketbase/pocketbase/tools/filesystem/internal/s3blob"
 	"github.com/pocketbase/pocketbase/tools/filesystem/internal/s3blob/s3"
 	"github.com/pocketbase/pocketbase/tools/list"
+
+	// explicit webp decoder because disintegration/imaging does not support webp
+	_ "golang.org/x/image/webp"
 )
 
 // note: the same as blob.ErrNotFound for backward compatibility with earlier versions
@@ -358,8 +361,10 @@ var inlineServeContentTypes = []string{
 
 // manualExtensionContentTypes is a map of file extensions to content types.
 var manualExtensionContentTypes = map[string]string{
-	".svg": "image/svg+xml", // (see https://github.com/whatwg/mimesniff/issues/7)
-	".css": "text/css",      // (see https://github.com/gabriel-vasile/mimetype/pull/113)
+	".svg": "image/svg+xml",   // (see https://github.com/whatwg/mimesniff/issues/7)
+	".css": "text/css",        // (see https://github.com/gabriel-vasile/mimetype/pull/113)
+	".js":  "text/javascript", // (see https://github.com/pocketbase/pocketbase/issues/6597)
+	".mjs": "text/javascript",
 }
 
 // forceAttachmentParam is the name of the request query parameter to
@@ -394,7 +399,7 @@ func (s *System) Serve(res http.ResponseWriter, req *http.Request, fileKey strin
 	// make an exception for specific content types and force a custom
 	// content type to send in the response so that it can be loaded properly
 	extContentType := realContentType
-	if ct, found := manualExtensionContentTypes[filepath.Ext(name)]; found && extContentType != ct {
+	if ct, found := manualExtensionContentTypes[filepath.Ext(name)]; found {
 		extContentType = ct
 	}
 
