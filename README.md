@@ -2,7 +2,7 @@
 
 NATS Tower is a simple multi tenant manager for NATS. It allows you to create tenants / accounts, manage users and manage permissions for those users.
 
-> Still work in progress, but it should do what it is supposed to :)  
+> This is still a young project and we are working hard to make it better. If you have any feedback or suggestions, please open an issue or create a pull request.  
 > See [https://nats-tower.com](https://nats-tower.com) for more information
 
 ## Demo instance
