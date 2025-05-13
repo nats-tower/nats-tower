@@ -1,12 +1,5 @@
 import { pb } from "@/lib/pocketbase";
-import { createLazyFileRoute } from "@tanstack/react-router";
-import {
-	Table,
-	TableBody,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table";
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { PlusIcon } from "lucide-react";
@@ -18,7 +11,8 @@ import {
 	getPendingAccountActions,
 } from "@/services/accounts";
 import { AddAccountDialogContent } from "@/components/ui/accounts/add-account-dialog";
-import { AccountDataTableRow } from "@/components/ui/accounts/account-data-table-row";
+import { DataTable } from "@/components/ui/data-table";
+import { getAccountsColumns } from "@/components/ui/accounts/account-columns";
 
 export const Route = createLazyFileRoute(
 	"/_app/installations_/$installationId/accounts/",
@@ -27,6 +21,7 @@ export const Route = createLazyFileRoute(
 });
 
 function Accounts() {
+	const navigate = useNavigate();
 	const { installationId } = Route.useParams();
 	const [dialogCreateAccountOpen, setDialogCreateAccountOpen] = useState(false);
 
@@ -71,6 +66,11 @@ function Accounts() {
 	)
 		return <div>loading...</div>;
 
+	const handleRefresh = () => {
+		mutateAccounts();
+		mutatePendingAccountActions();
+	};
+
 	return (
 		<div className="p-4">
 			<div className="container mx-auto">
@@ -84,8 +84,22 @@ function Accounts() {
 							</div>
 						</div>
 					</div>
-					{pb.authStore.isSuperuser ? (
-						<div className="flex-1 flex justify-end gap-2">
+				</div>
+			</div>
+			<div className="container mx-auto bg-white rounded-lg shadow p-4">
+				<DataTable
+					columns={getAccountsColumns(
+						navigate,
+						installationData,
+						teamsData,
+						pendingAccountActionsData,
+						installationId,
+						handleRefresh,
+					)}
+					data={accountsData || []}
+					noRowsText="No accounts found"
+					addButton={
+						pb.authStore.isSuperuser ? (
 							<Dialog
 								open={dialogCreateAccountOpen}
 								onOpenChange={setDialogCreateAccountOpen}
@@ -104,37 +118,9 @@ function Accounts() {
 									/>
 								) : undefined}
 							</Dialog>
-						</div>
-					) : undefined}
-				</div>
-			</div>
-			<div className="container mx-auto bg-white rounded-lg shadow">
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead className="w-[100px]">Status</TableHead>
-							<TableHead className="w-[100px]">Name</TableHead>
-							<TableHead>Description</TableHead>
-							<TableHead className="text-right">Actions</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{accountsData?.map((account) => (
-							<AccountDataTableRow
-								key={account.id}
-								installationData={installationData}
-								pendingAccountData={pendingAccountActionsData}
-								teamsData={teamsData}
-								account={account}
-								installationId={installationId}
-								mutateAccounts={() => {
-									mutateAccounts();
-									mutatePendingAccountActions();
-								}}
-							/>
-						))}
-					</TableBody>
-				</Table>
+						) : undefined
+					}
+				/>
 			</div>
 		</div>
 	);
