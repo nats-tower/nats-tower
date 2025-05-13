@@ -12,9 +12,7 @@ import {
 	TableBody,
 } from "@/components/ui/table";
 import { pb } from "@/lib/pocketbase";
-import type {
-	NatsAuthOperatorsRecord,
-} from "@/lib/pocketbase-types";
+import type { NatsAuthOperatorsRecord } from "@/lib/pocketbase-types";
 import useSWR from "swr";
 import { toStringSigBytesPerKB } from "@/lib/utils";
 import type { ExpandedNatsAuthAccountsResponse } from "@/lib/expanded-pocketbase-types";
@@ -126,7 +124,8 @@ export function AccountInfoSheet({
 								JetStream Max Memory
 							</div>
 							<div className="text-xl font-semibold">
-								{accountData.expand.limits.jetstream_max_memory === -1
+								{accountData.expand.limits.jetstream_max_memory === -1 ||
+								accountData.expand.limits.jetstream_max_memory === undefined
 									? "Unlimited"
 									: toStringSigBytesPerKB(
 											accountData.expand.limits.jetstream_max_memory,
@@ -141,7 +140,8 @@ export function AccountInfoSheet({
 								JetStream Max Disk
 							</div>
 							<div className="text-xl font-semibold">
-								{accountData.expand.limits.jetstream_max_disk === -1
+								{accountData.expand.limits.jetstream_max_disk === -1 ||
+								accountData.expand.limits.jetstream_max_disk === undefined
 									? "Unlimited"
 									: toStringSigBytesPerKB(
 											accountData.expand.limits.jetstream_max_disk,
