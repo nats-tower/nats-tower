@@ -419,8 +419,9 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 			return nil, fmt.Errorf("non-filterable field %q", prop)
 		}
 
-		// json field -> treat the rest of the props as json path
-		if field != nil && field.Type() == FieldTypeJSON {
+		// json or geoPoint field -> treat the rest of the props as json path
+		// @todo consider converting to "JSONExtractable" interface with optional extra validation for the remaining props?
+		if field != nil && (field.Type() == FieldTypeJSON || field.Type() == FieldTypeGeoPoint) {
 			var jsonPath strings.Builder
 			for j, p := range r.activeProps[i+1:] {
 				if _, err := strconv.Atoi(p); err == nil {
