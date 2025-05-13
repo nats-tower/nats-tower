@@ -114,9 +114,6 @@ function Users() {
 							</div>
 						</div>
 					</div>
-					<div className="flex-1 flex justify-end gap-2">
-						{/* Keep dialog for creating users */}
-					</div>
 				</div>
 			</div>
 			<div className="container mx-auto bg-white rounded-lg shadow p-4">
