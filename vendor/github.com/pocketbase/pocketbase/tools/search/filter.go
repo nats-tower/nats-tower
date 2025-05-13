@@ -249,13 +249,22 @@ func buildResolversExpr(
 	return expr, nil
 }
 
+var normalizedIdentifiers = map[string]string{
+	// if `null` field is missing, treat `null` identifier as NULL token
+	"null": "NULL",
+	// if `true` field is missing, treat `true` identifier as TRUE token
+	"true": "1",
+	// if `false` field is missing, treat `false` identifier as FALSE token
+	"false": "0",
+}
+
 func resolveToken(token fexpr.Token, fieldResolver FieldResolver) (*ResolverResult, error) {
 	switch token.Type {
 	case fexpr.TokenIdentifier:
 		// check for macros
 		// ---
 		if macroFunc, ok := identifierMacros[token.Literal]; ok {
-			placeholder := "t" + security.PseudorandomString(5)
+			placeholder := "t" + security.PseudorandomString(8)
 
 			macroValue, err := macroFunc()
 			if err != nil {
@@ -271,40 +280,43 @@ func resolveToken(token fexpr.Token, fieldResolver FieldResolver) (*ResolverResu
 		// custom resolver
 		// ---
 		result, err := fieldResolver.Resolve(token.Literal)
-
 		if err != nil || result.Identifier == "" {
-			m := map[string]string{
-				// if `null` field is missing, treat `null` identifier as NULL token
-				"null": "NULL",
-				// if `true` field is missing, treat `true` identifier as TRUE token
-				"true": "1",
-				// if `false` field is missing, treat `false` identifier as FALSE token
-				"false": "0",
-			}
-			if v, ok := m[strings.ToLower(token.Literal)]; ok {
-				return &ResolverResult{Identifier: v}, nil
+			for k, v := range normalizedIdentifiers {
+				if strings.EqualFold(k, token.Literal) {
+					return &ResolverResult{Identifier: v}, nil
+				}
 			}
 			return nil, err
 		}
 
 		return result, err
 	case fexpr.TokenText:
-		placeholder := "t" + security.PseudorandomString(5)
+		placeholder := "t" + security.PseudorandomString(8)
 
 		return &ResolverResult{
 			Identifier: "{:" + placeholder + "}",
 			Params:     dbx.Params{placeholder: token.Literal},
 		}, nil
 	case fexpr.TokenNumber:
-		placeholder := "t" + security.PseudorandomString(5)
+		placeholder := "t" + security.PseudorandomString(8)
 
 		return &ResolverResult{
 			Identifier: "{:" + placeholder + "}",
 			Params:     dbx.Params{placeholder: cast.ToFloat64(token.Literal)},
 		}, nil
+	case fexpr.TokenFunction:
+		fn, ok := TokenFunctions[token.Literal]
+		if !ok {
+			return nil, fmt.Errorf("unknown function %q", token.Literal)
+		}
+
+		args, _ := token.Meta.([]fexpr.Token)
+		return fn(func(argToken fexpr.Token) (*ResolverResult, error) {
+			return resolveToken(argToken, fieldResolver)
+		}, args...)
 	}
 
-	return nil, errors.New("unresolvable token type")
+	return nil, fmt.Errorf("unsupported token type %q", token.Type)
 }
 
 // Resolves = and != expressions in an attempt to minimize the COALESCE
@@ -614,8 +626,8 @@ func (e *manyVsManyExpr) Build(db *dbx.DB, params dbx.Params) string {
 		return "0=1"
 	}
 
-	lAlias := "__ml" + security.PseudorandomString(5)
-	rAlias := "__mr" + security.PseudorandomString(5)
+	lAlias := "__ml" + security.PseudorandomString(8)
+	rAlias := "__mr" + security.PseudorandomString(8)
 
 	whereExpr, buildErr := buildResolversExpr(
 		&ResolverResult{
@@ -671,7 +683,7 @@ func (e *manyVsOneExpr) Build(db *dbx.DB, params dbx.Params) string {
 		return "0=1"
 	}
 
-	alias := "__sm" + security.PseudorandomString(5)
+	alias := "__sm" + security.PseudorandomString(8)
 
 	r1 := &ResolverResult{
 		NoCoalesce: e.noCoalesce,
