@@ -13,6 +13,7 @@ export enum Collections {
 	Superusers = "_superusers",
 	NatsAuthAccounts = "nats_auth_accounts",
 	NatsAuthAccountsPending = "nats_auth_accounts_pending",
+	NatsAuthK8sAccess = "nats_auth_k8s_access",
 	NatsAuthLimits = "nats_auth_limits",
 	NatsAuthOperators = "nats_auth_operators",
 	NatsAuthUsers = "nats_auth_users",
@@ -118,14 +119,21 @@ export type NatsAuthAccountsPendingRecord = {
 	message?: string
 }
 
+export type NatsAuthK8sAccessRecord = {
+	account: RecordIdString
+	cluster: string
+	id: string
+	namespace: string
+}
+
 export enum NatsAuthLimitsTypeOptions {
 	"account" = "account",
 }
 export type NatsAuthLimitsRecord = {
 	default?: boolean
 	id: string
-	jetstream_max_disk: number
-	jetstream_max_memory: number
+	jetstream_max_disk?: number
+	jetstream_max_memory?: number
 	max_connections: number
 	name: string
 	operator: RecordIdString
@@ -191,6 +199,7 @@ export type OtpsResponse<Texpand = unknown> = Required<OtpsRecord> & BaseSystemF
 export type SuperusersResponse<Texpand = unknown> = Required<SuperusersRecord> & AuthSystemFields<Texpand>
 export type NatsAuthAccountsResponse<Texpand = unknown> = Required<NatsAuthAccountsRecord> & BaseSystemFields<Texpand>
 export type NatsAuthAccountsPendingResponse<Texpand = unknown> = Required<NatsAuthAccountsPendingRecord> & BaseSystemFields<Texpand>
+export type NatsAuthK8sAccessResponse<Texpand = unknown> = Required<NatsAuthK8sAccessRecord> & BaseSystemFields<Texpand>
 export type NatsAuthLimitsResponse<Texpand = unknown> = Required<NatsAuthLimitsRecord> & BaseSystemFields<Texpand>
 export type NatsAuthOperatorsResponse<Texpand = unknown> = Required<NatsAuthOperatorsRecord> & BaseSystemFields<Texpand>
 export type NatsAuthUsersResponse<Texpand = unknown> = Required<NatsAuthUsersRecord> & BaseSystemFields<Texpand>
@@ -207,6 +216,7 @@ export type CollectionRecords = {
 	_superusers: SuperusersRecord
 	nats_auth_accounts: NatsAuthAccountsRecord
 	nats_auth_accounts_pending: NatsAuthAccountsPendingRecord
+	nats_auth_k8s_access: NatsAuthK8sAccessRecord
 	nats_auth_limits: NatsAuthLimitsRecord
 	nats_auth_operators: NatsAuthOperatorsRecord
 	nats_auth_users: NatsAuthUsersRecord
@@ -222,6 +232,7 @@ export type CollectionResponses = {
 	_superusers: SuperusersResponse
 	nats_auth_accounts: NatsAuthAccountsResponse
 	nats_auth_accounts_pending: NatsAuthAccountsPendingResponse
+	nats_auth_k8s_access: NatsAuthK8sAccessResponse
 	nats_auth_limits: NatsAuthLimitsResponse
 	nats_auth_operators: NatsAuthOperatorsResponse
 	nats_auth_users: NatsAuthUsersResponse
@@ -240,6 +251,7 @@ export type TypedPocketBase = PocketBase & {
 	collection(idOrName: '_superusers'): RecordService<SuperusersResponse>
 	collection(idOrName: 'nats_auth_accounts'): RecordService<NatsAuthAccountsResponse>
 	collection(idOrName: 'nats_auth_accounts_pending'): RecordService<NatsAuthAccountsPendingResponse>
+	collection(idOrName: 'nats_auth_k8s_access'): RecordService<NatsAuthK8sAccessResponse>
 	collection(idOrName: 'nats_auth_limits'): RecordService<NatsAuthLimitsResponse>
 	collection(idOrName: 'nats_auth_operators'): RecordService<NatsAuthOperatorsResponse>
 	collection(idOrName: 'nats_auth_users'): RecordService<NatsAuthUsersResponse>

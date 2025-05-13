@@ -51,6 +51,15 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 		return err
 	}
 
+	_, err = initNATSAuthK8sAccessCollection(m.ctx,
+		app,
+		m.logger,
+		apiRule,
+		accountCollection)
+	if err != nil {
+		return err
+	}
+
 	// create pending collection
 	pendingCollection, err := initNATSAuthAccountsPendingCollection(m.ctx,
 		app,
@@ -505,6 +514,55 @@ func initNATSAuthLimitsCollection(_ context.Context,
 	addOrUpdateField(collection, &core.BoolField{
 		Name:     "default",
 		Required: false,
+	})
+
+	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)
+	if err := app.Save(collection); err != nil {
+		return nil, err
+	}
+	return collection, nil
+}
+
+func initNATSAuthK8sAccessCollection(_ context.Context,
+	app core.App,
+	_ *slog.Logger,
+	rule string,
+	accountCollection *core.Collection) (*core.Collection, error) {
+
+	collection, err := app.FindCollectionByNameOrId("nats_auth_k8s_access")
+
+	if err == sql.ErrNoRows {
+		collection = core.NewBaseCollection("nats_auth_k8s_access")
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	collection.ListRule = types.Pointer(rule + " && (account.teams:length = 0 || account.teams.members.id ?= @request.auth.id)")
+	collection.ViewRule = types.Pointer(rule + " && (account.teams:length = 0 || account.teams.members.id ?= @request.auth.id)")
+	collection.CreateRule = types.Pointer(rule + " && (account.teams:length = 0 || account.teams.members.id ?= @request.auth.id)")
+	collection.UpdateRule = types.Pointer(rule + " && (account.teams:length = 0 || account.teams.members.id ?= @request.auth.id)")
+	collection.DeleteRule = types.Pointer(rule + " && (account.teams:length = 0 || account.teams.members.id ?= @request.auth.id)")
+	collection.Indexes = types.JSONArray[string]{
+		"create unique index nats_auth_k8s_access_unique_acc_cluster_ns on nats_auth_k8s_access (account,cluster,namespace)",
+	}
+
+	addOrUpdateField(collection, &core.RelationField{
+		Name:          "account",
+		Required:      true,
+		CollectionId:  accountCollection.Id,
+		MaxSelect:     1,
+		CascadeDelete: true,
+	})
+
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "cluster",
+		Required: true,
+	})
+
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "namespace",
+		Required: true,
 	})
 
 	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)

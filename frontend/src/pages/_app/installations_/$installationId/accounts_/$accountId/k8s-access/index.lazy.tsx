@@ -1,10 +1,7 @@
 import { pb } from "@/lib/pocketbase";
 import { createLazyFileRoute } from "@tanstack/react-router";
-import useSWR from "swr";
 import type {
-	NatsAuthAccountsRecord,
-	NatsAuthOperatorsRecord,
-	NatsAuthUsersRecord,
+	NatsAuthK8sAccessRecord,
 } from "@/lib/pocketbase-types";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -22,82 +19,45 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, Save } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
-import { getUsersColumns } from "@/components/ui/users/user-columns";
+import { getAccountById } from "@/services/accounts";
+import { getInstallationById } from "@/services/installations";
+import { getK8sAccessForAccount } from "@/services/k8s-access";
+import { getK8sAccessColumns } from "@/components/ui/k8s-access/k8s-access-columns";
 
 export const Route = createLazyFileRoute(
-	"/_app/installations_/$installationId/accounts_/$accountId/users/",
+	"/_app/installations_/$installationId/accounts_/$accountId/k8s-access/",
 )({
-	component: Users,
+	component: K8sAccess,
 });
 
-function Users() {
+function K8sAccess() {
 	const { installationId, accountId } = Route.useParams();
-	const [dialogCreateUserOpen, setDialogCreateUserOpen] = useState(false);
+	const [dialogCreateK8sAccessOpen, setDialogCreateK8sAccessOpen] = useState(false);
 
 	const {
 		data: installationData,
 		error: installationError,
 		isLoading: installationLoading,
-	} = useSWR(
-		[`/installations/${installationId}`, installationId],
-		async ([_, pInstallationId]) => {
-			if (!pInstallationId) {
-				return;
-			}
-			return pb
-				.collection<NatsAuthOperatorsRecord>("nats_auth_operators")
-				.getOne(pInstallationId);
-		},
-	);
+	} = getInstallationById(installationId);
 
 	const {
 		data: accountData,
 		error: accountError,
 		isLoading: accountLoading,
-	} = useSWR(
-		[
-			`/installations/${installationId}/accounts/${accountId}`,
-			installationId,
-			accountId,
-		],
-		async ([_, installationId, accountId]) => {
-			if (!installationId || !accountId) {
-				return;
-			}
-
-			return pb
-				.collection<NatsAuthAccountsRecord>("nats_auth_accounts")
-				.getOne(accountId);
-		},
-	);
+	} = getAccountById(installationId, accountId);
 
 	const {
-		data: usersData,
-		error: usersError,
-		isLoading: usersLoading,
-		mutate: mutateUsers,
-	} = useSWR(
-		[
-			`/installations/${installationId}/accounts/${accountId}/users`,
-			installationId,
-			accountId,
-		],
-		async ([_, installationId, accountId]) => {
-			if (!installationId || !accountId) {
-				return;
-			}
+		data: k8sAccessData,
+		error: k8sAccessError,
+		isLoading: k8sAccessLoading,
+		mutate: mutateK8sAccess,
+	} = getK8sAccessForAccount(accountId);
 
-			return pb.collection<NatsAuthUsersRecord>("nats_auth_users").getFullList({
-				filter: `account = "${accountId}"`,
-			});
-		},
-	);
-
-	if (installationError || accountError || usersError)
+	if (installationError || accountError || k8sAccessError)
 		return <div>failed to load</div>;
-	if (installationLoading || accountLoading || usersLoading)
+	if (installationLoading || accountLoading || k8sAccessLoading)
 		return <div>loading...</div>;
-	if (!installationData || !accountData || !usersData) {
+	if (!installationData || !accountData || !k8sAccessData) {
 		return <div>no data</div>;
 	}
 
@@ -107,10 +67,10 @@ function Users() {
 				<div className="mb-6 flex flex-row">
 					<div className="flex items-center">
 						<div className="flex-1">
-							<h2 className="text-2xl font-bold">Users</h2>
+							<h2 className="text-2xl font-bold">Kubernetes Access</h2>
 							<div className="text-sm text-gray-500">
-								List of users for account '{accountData?.name}' on installation
-								'{installationData?.description}'
+								Manage Kubernetes access for account '{accountData?.name}' on installation
+								'{installationData?.description}'.
 							</div>
 						</div>
 					</div>
@@ -118,17 +78,17 @@ function Users() {
 			</div>
 			<div className="container mx-auto bg-white rounded-lg shadow p-4">
 				<DataTable
-					columns={getUsersColumns(accountData, installationData, mutateUsers)}
-					data={usersData || []}
-					noRowsText="No users found"
+					columns={getK8sAccessColumns(mutateK8sAccess)}
+					data={k8sAccessData || []}
+					noRowsText="No Kubernetes Access found"
 					addButton={
 						<Dialog
-							open={dialogCreateUserOpen}
-							onOpenChange={setDialogCreateUserOpen}
+							open={dialogCreateK8sAccessOpen}
+							onOpenChange={setDialogCreateK8sAccessOpen}
 						>
 							<DialogTrigger asChild>
 								<Button variant="outline">
-									<PlusIcon /> Add User
+									<PlusIcon /> Add Access
 								</Button>
 							</DialogTrigger>
 							<DialogContent className="sm:max-w-xl">
@@ -137,58 +97,58 @@ function Users() {
 									onSubmit={async (e) => {
 										e.preventDefault();
 										const form = e.target as HTMLFormElement;
-										const name =
-											form.querySelector<HTMLInputElement>("#name")?.value;
-										const description =
+										const cluster =
+											form.querySelector<HTMLInputElement>("#cluster")?.value;
+										const namespace =
 											form.querySelector<HTMLInputElement>(
-												"#description",
+												"#namespace",
 											)?.value;
-										if (!name || !description) {
+										if (!cluster || !namespace) {
 											return;
 										}
 										await pb
-											.collection<NatsAuthUsersRecord>("nats_auth_users")
+											.collection<NatsAuthK8sAccessRecord>("nats_auth_k8s_access")
 											.create({
-												name,
-												description,
+												cluster,
+												namespace,
 												account: accountId,
 											});
 
-										mutateUsers();
-										setDialogCreateUserOpen(false);
+										mutateK8sAccess();
+										setDialogCreateK8sAccessOpen(false);
 									}}
 								>
 									<DialogHeader>
 										<DialogTitle>
-											Add user for installation '{installationData?.description}
+											Add Kubernetes Access for installation '{installationData?.description}
 											' in account '{accountData?.name}'
 										</DialogTitle>
 										<DialogDescription>
-											Fill in a name and a description for the new user.
+											Fill in the cluster and namespace for the new Kubernetes access.
 										</DialogDescription>
 									</DialogHeader>
 									<div className="flex items-center space-x-2 mt-2">
 										<div className="grid flex-1 gap-2">
-											<Label htmlFor="name">
-												Name
+											<Label htmlFor="cluster">
+												Cluster-ID
 											</Label>
 											<Input
-												id="name"
+												id="cluster"
 												defaultValue=""
-												placeholder="Enter user name"
+												placeholder="Enter Cluster-ID as configured in the k8s operator"
 												required
 											/>
 										</div>
 									</div>
 									<div className="flex items-center space-x-2 mt-2">
 										<div className="grid flex-1 gap-2">
-											<Label htmlFor="description">
-												Description
+											<Label htmlFor="namespace">
+												Namespace
 											</Label>
 											<Input
-												id="description"
+												id="namespace"
 												defaultValue=""
-												placeholder="Enter user description"
+												placeholder={`Enter namespace which should gain access to Account '${accountData.name}'`}
 												required
 											/>
 										</div>
@@ -201,7 +161,7 @@ function Users() {
 										</DialogClose>
 										<Button type="submit" className="px-3">
 											<Save />
-											<span>Add User</span>
+											<span>Add Access</span>
 										</Button>
 									</DialogFooter>
 								</form>

@@ -1,8 +1,9 @@
 import { pb } from "@/lib/pocketbase";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import useSWR from "swr";
-import { DotsVerticalIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
+import { PlusIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
 
 import type {
 	NatsAuthLimitsRecord,
@@ -19,26 +20,13 @@ import {
 	DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-	TableHeader,
-	TableRow,
-	TableHead,
-	TableBody,
-	TableCell,
-	Table,
-} from "@/components/ui/table";
 import { Save } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
-import { toStringSigBytesPerKB } from "@/lib/utils";
+import { getLimitsColumns } from "@/components/ui/limits/limit-columns";
 
 export const Route = createLazyFileRoute(
-	"/_app/installations/$installationId/limits/",
+	"/_app/installations_/$installationId/limits/",
 )({
 	component: Limits,
 });
@@ -96,9 +84,15 @@ function Limits() {
 							</div>
 						</div>
 					</div>
-
-					{pb.authStore.isSuperuser ? (
-						<div className="flex-1 flex justify-end gap-2">
+				</div>
+			</div>
+			<div className="container mx-auto bg-white rounded-lg shadow p-4">
+				<DataTable
+					columns={getLimitsColumns(limitsMutate)}
+					data={limitsData || []}
+					noRowsText="No limits found"
+					addButton={
+						pb.authStore.isSuperuser ? (
 							<Dialog
 								open={dialogCreateLimitOpen}
 								onOpenChange={setDialogCreateLimitOpen}
@@ -232,89 +226,9 @@ function Limits() {
 									</form>
 								</DialogContent>
 							</Dialog>
-						</div>
-					) : undefined}
-				</div>
-			</div>
-			<div className="container mx-auto bg-white rounded-lg shadow">
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead>Name</TableHead>
-							<TableHead>Max Connections</TableHead>
-							<TableHead>Jetstream Max Disk</TableHead>
-							<TableHead>Jetstream Max Memory</TableHead>
-							<TableHead className="text-right">Actions</TableHead>
-						</TableRow>
-					</TableHeader>
-
-					<TableBody>
-						{limitsData?.map((limit) => (
-							<TableRow key={limit.id}>
-								<TableCell className="font-medium">{limit.name}</TableCell>
-								<TableCell>
-									{limit.max_connections === -1
-										? "Unlimited"
-										: limit.max_connections}
-								</TableCell>
-								<TableCell>
-									{limit.jetstream_max_disk === -1
-										? "Unlimited"
-										: toStringSigBytesPerKB(limit.jetstream_max_disk, 2, 1024)}
-								</TableCell>
-								<TableCell>
-									{limit.jetstream_max_memory === -1
-										? "Unlimited"
-										: toStringSigBytesPerKB(
-												limit.jetstream_max_memory,
-												2,
-												1024,
-											)}
-								</TableCell>
-								<TableCell className="text-right">
-									{pb.authStore.isSuperuser ? (
-										<Popover>
-											<PopoverTrigger
-												asChild
-												onClick={(e) => {
-													e.stopPropagation();
-												}}
-											>
-												<Button variant="outline" size="icon" className="ml-2">
-													<DotsVerticalIcon />
-												</Button>
-											</PopoverTrigger>
-											<PopoverContent className="p-1 w-auto">
-												<div className="grid">
-													<Button
-														variant="ghost"
-														className="hover:bg-red-200 w-full"
-														onClick={async () => {
-															if (
-																confirm(
-																	"Are you sure you want to delete this limit?",
-																)
-															) {
-																await pb
-																	.collection<NatsAuthLimitsRecord>(
-																		"nats_auth_limits",
-																	)
-																	.delete(limit.id);
-																limitsMutate();
-															}
-														}}
-													>
-														<TrashIcon className="mr-1" /> Delete Limit
-													</Button>
-												</div>
-											</PopoverContent>
-										</Popover>
-									) : <span>{"<None>"}</span>}
-								</TableCell>
-							</TableRow>
-						))}
-					</TableBody>
-				</Table>
+						) : undefined
+					}
+				/>
 			</div>
 		</div>
 	);

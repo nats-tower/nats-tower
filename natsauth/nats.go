@@ -148,7 +148,10 @@ func CreateNATSAuthModule(ctx context.Context,
 		return nil, err
 	}
 
-	handleLimitAndAccountUpdate := func(logger *slog.Logger, dao core.App, record *core.Record, revokeUsers ...*core.Record) error {
+	handleLimitAndAccountUpdate := func(logger *slog.Logger,
+		dao core.App,
+		record *core.Record,
+		revokeUsers ...*core.Record) error {
 
 		// find operator to sign these updates
 		operatorRecord, err := dao.FindRecordById("nats_auth_operators", record.GetString("operator"))
@@ -211,7 +214,9 @@ func CreateNATSAuthModule(ctx context.Context,
 		return nil
 	}
 
-	handleNatsContextUpsert := func(logger *slog.Logger, dao core.App, record *core.Record) error {
+	handleNatsContextUpsert := func(logger *slog.Logger,
+		dao core.App,
+		record *core.Record) error {
 		logger = logger.With(slog.String("account_id", record.GetString("account")))
 
 		acc, err := dao.FindRecordById("nats_auth_accounts", record.GetString("account"))

@@ -1,4 +1,4 @@
-import type { NatsAuthAccountsResponse, NatsAuthOperatorsResponse, TeamsRecord } from "./pocketbase-types";
+import type { NatsAuthAccountsResponse, NatsAuthLimitsRecord, NatsAuthOperatorsResponse, TeamsRecord } from "./pocketbase-types";
 
 export type ExpandedNatsAuthOperatorsResponse = NatsAuthOperatorsResponse & {
     expand: {
@@ -9,5 +9,6 @@ export type ExpandedNatsAuthOperatorsResponse = NatsAuthOperatorsResponse & {
 export type ExpandedNatsAuthAccountsResponse = NatsAuthAccountsResponse & {
     expand: {
         teams?: TeamsRecord[];
+        limits?: NatsAuthLimitsRecord;
     }
 }
