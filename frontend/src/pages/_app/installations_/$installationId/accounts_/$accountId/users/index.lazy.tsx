@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 
 export const Route = createLazyFileRoute(
-	"/_app/installations/$installationId/accounts/$accountId/users/",
+	"/_app/installations_/$installationId/accounts_/$accountId/users/",
 )({
 	component: Users,
 });

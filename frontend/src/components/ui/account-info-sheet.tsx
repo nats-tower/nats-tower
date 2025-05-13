@@ -10,15 +10,14 @@ import {
 	TableHead,
 	TableCell,
 	TableBody,
-	TableCaption,
 } from "@/components/ui/table";
 import { pb } from "@/lib/pocketbase";
 import type {
 	NatsAuthOperatorsRecord,
-	NatsAuthAccountsRecord,
 } from "@/lib/pocketbase-types";
 import useSWR from "swr";
 import { toStringSigBytesPerKB } from "@/lib/utils";
+import type { ExpandedNatsAuthAccountsResponse } from "@/lib/expanded-pocketbase-types";
 
 export interface AccountInfoSheetProps {
 	installationId: string;
@@ -50,7 +49,7 @@ export function AccountInfoSheet({
 		isLoading: accountLoading,
 	} = useSWR(
 		[
-			`/installations/${installationId}/accounts/${accountId}`,
+			`/installations/${installationId}/accounts/${accountId}?expand=limits`,
 			installationId,
 			accountId,
 		],
@@ -60,8 +59,10 @@ export function AccountInfoSheet({
 			}
 
 			return pb
-				.collection<NatsAuthAccountsRecord>("nats_auth_accounts")
-				.getOne(accountId);
+				.collection<ExpandedNatsAuthAccountsResponse>("nats_auth_accounts")
+				.getOne(accountId, {
+					expand: "limits",
+				});
 		},
 	);
 
@@ -103,8 +104,63 @@ export function AccountInfoSheet({
 					{installationData?.description}'
 				</SheetDescription>
 			</SheetHeader>
+
+			<div className="my-6">
+				<h3 className="text-lg font-medium mb-4">Account Limits</h3>
+
+				{accountData?.expand?.limits ? (
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div className="bg-card rounded-lg p-4 border">
+							<div className="text-sm text-muted-foreground mb-1">
+								Max Connections
+							</div>
+							<div className="text-xl font-semibold">
+								{accountData.expand.limits.max_connections === -1
+									? "Unlimited"
+									: accountData.expand.limits.max_connections.toLocaleString()}
+							</div>
+						</div>
+
+						<div className="bg-card rounded-lg p-4 border">
+							<div className="text-sm text-muted-foreground mb-1">
+								JetStream Max Memory
+							</div>
+							<div className="text-xl font-semibold">
+								{accountData.expand.limits.jetstream_max_memory === -1
+									? "Unlimited"
+									: toStringSigBytesPerKB(
+											accountData.expand.limits.jetstream_max_memory,
+											2,
+											1024,
+										)}
+							</div>
+						</div>
+
+						<div className="bg-card rounded-lg p-4 border">
+							<div className="text-sm text-muted-foreground mb-1">
+								JetStream Max Disk
+							</div>
+							<div className="text-xl font-semibold">
+								{accountData.expand.limits.jetstream_max_disk === -1
+									? "Unlimited"
+									: toStringSigBytesPerKB(
+											accountData.expand.limits.jetstream_max_disk,
+											2,
+											1024,
+										)}
+							</div>
+						</div>
+					</div>
+				) : (
+					<div className="text-muted-foreground italic">
+						No limits configured for this account
+					</div>
+				)}
+			</div>
+
+			<h3 className="text-lg font-medium mb-4">List of streams</h3>
+
 			<Table>
-				<TableCaption>List of streams</TableCaption>
 				<TableHeader>
 					<TableRow>
 						<TableHead>Name</TableHead>

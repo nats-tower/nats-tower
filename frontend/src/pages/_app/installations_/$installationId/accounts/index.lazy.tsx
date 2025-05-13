@@ -21,7 +21,7 @@ import { AddAccountDialogContent } from "@/components/ui/accounts/add-account-di
 import { AccountDataTableRow } from "@/components/ui/accounts/account-data-table-row";
 
 export const Route = createLazyFileRoute(
-	"/_app/installations/$installationId/accounts/",
+	"/_app/installations_/$installationId/accounts/",
 )({
 	component: Accounts,
 });

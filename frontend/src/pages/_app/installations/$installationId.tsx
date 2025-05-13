@@ -49,12 +49,12 @@ function Installation() {
 		installationPref.setInstallationId,
 	]);
 
-	const handleCopy = (value: string | undefined) => {
+	const handleCopy = (value: string | undefined, message: string) => {
 		if (!value) {
 			return;
 		}
 		navigator.clipboard.writeText(value);
-		toast("Installation URL copied to clipboard.");
+		toast(message);
 	};
 
 	const sysAccount = useSWR(
@@ -136,7 +136,96 @@ resolver_preload = {
 											<Button
 												variant="outline"
 												onClick={() => {
-													handleCopy(data?.url);
+													handleCopy(data?.url, "Installation URL copied to clipboard.");
+												}}
+											>
+												<CopyIcon />
+											</Button>
+										</div>
+
+										{pb.authStore.isSuperuser ? (
+											<div className="ml-2">
+												<Dialog>
+													<DialogTrigger asChild>
+														<Button variant="outline">
+															<GearIcon />
+														</Button>
+													</DialogTrigger>
+													<DialogContent className="sm:max-w-md">
+														<DialogHeader>
+															<DialogTitle>
+																Settings for installation '{data?.description}'
+															</DialogTitle>
+															<DialogDescription>{data?.url}</DialogDescription>
+														</DialogHeader>
+														<p className="text-sm text-gray-500">
+															Use the following NATS config snippet to manage
+															NATS servers via NATS Tower.
+														</p>
+														{data && sysAccount.data ? (
+															<Textarea
+																value={getNATSSettings(data, sysAccount.data)}
+																readOnly
+																className="mb-4 h-96 bg-slate-950 text-white"
+															/>
+														) : undefined}
+														<DialogFooter className="justify-end mt-2">
+															<Button
+																onClick={() => {
+																	if (data && sysAccount.data) {
+																		handleCopySettings(
+																			getNATSSettings(data, sysAccount.data),
+																		);
+																	}
+																}}
+															>
+																Copy as NATS Config
+															</Button>
+															<Button
+																onClick={() => {
+																	if (data && sysAccount.data) {
+																		handleCopySettings(
+																			getYamlSettings(data, sysAccount.data),
+																		);
+																	}
+																}}
+															>
+																Copy as Yaml
+															</Button>
+															<DialogClose asChild>
+																<Button type="button" variant="secondary">
+																	Close
+																</Button>
+															</DialogClose>
+														</DialogFooter>
+													</DialogContent>
+												</Dialog>
+											</div>
+										) : undefined}
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<Separator orientation="horizontal" className="my-6" />
+
+					<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+						<div className="col-span-1 lg:col-span-12">
+							<div className="bg-white rounded-lg shadow">
+								<div className="p-4">
+									<div className="flex items-center">
+										<div className="flex-1">
+											<div className="text-sm text-gray-500">Identifier</div>
+											<div className="text-m font-semibold">
+												{data?.public_key}
+											</div>
+										</div>
+										<div className="ml-2">
+											<Button
+												variant="outline"
+												onClick={() => {
+													handleCopy(data?.public_key, "Identifier copied to clipboard");
 												}}
 											>
 												<CopyIcon />

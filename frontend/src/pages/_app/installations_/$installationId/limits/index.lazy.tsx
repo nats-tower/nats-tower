@@ -38,7 +38,7 @@ import {
 import { toStringSigBytesPerKB } from "@/lib/utils";
 
 export const Route = createLazyFileRoute(
-	"/_app/installations/$installationId/limits/",
+	"/_app/installations_/$installationId/limits/",
 )({
 	component: Limits,
 });
