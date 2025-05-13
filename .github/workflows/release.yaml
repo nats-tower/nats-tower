@@ -43,7 +43,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           # include ,linux/arm64 for arm builds but github is soooo slow
-          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
