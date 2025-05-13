@@ -44,7 +44,7 @@ export function getLimitsColumns(limitsMutate: () => void): ColumnDef<NatsAuthLi
       cell: ({ row }) => {
         return (
           <div>
-            {row.original.jetstream_max_disk === -1
+            {row.original.jetstream_max_disk === -1 || row.original.jetstream_max_disk === undefined
               ? "Unlimited"
               : toStringSigBytesPerKB(row.original.jetstream_max_disk, 2, 1024)}
           </div>
@@ -58,7 +58,7 @@ export function getLimitsColumns(limitsMutate: () => void): ColumnDef<NatsAuthLi
       cell: ({ row }) => {
         return (
           <div>
-            {row.original.jetstream_max_memory === -1
+            {row.original.jetstream_max_memory === -1 || row.original.jetstream_max_memory === undefined
               ? "Unlimited"
               : toStringSigBytesPerKB(row.original.jetstream_max_memory, 2, 1024)}
           </div>

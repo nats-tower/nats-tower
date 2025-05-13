@@ -109,6 +109,13 @@ export function getNavInfo(resolvedHref: string | undefined) {
 							url: "/installations/$installationId/accounts/$accountId/users",
 						},
 					},
+					{
+						path: "/installations/$installationId/accounts/$accountId/k8s-access",
+						breadcrumb: {
+							name: "Kubernetes Access",
+							url: "/installations/$installationId/accounts/$accountId/k8s-access",
+						},
+					},
 				],
 			},
 			{
@@ -131,7 +138,6 @@ export function getNavInfo(resolvedHref: string | undefined) {
 		const element = navInfo.items[index];
 
 		let isActive = false;
-		const traversedBreadcrumbs = [];
 		if (element.breadcrumb) {
 			element.breadcrumb.url = resolveBreadcrumb(
 				splitted,
@@ -146,10 +152,9 @@ export function getNavInfo(resolvedHref: string | undefined) {
 					splitted,
 					subElement.breadcrumb.url,
 				);
-				traversedBreadcrumbs.push(subElement.breadcrumb);
 				if (compareHrefs(subElement.path, resolvedHref)) {
 					isActive = true;
-					navInfo.breadcrumbs = traversedBreadcrumbs;
+					navInfo.breadcrumbs = [subElement.breadcrumb];
 					break;
 				}
 			}

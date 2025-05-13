@@ -33,6 +33,10 @@ const AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyImport =
   createFileRoute(
     '/_app/installations_/$installationId/accounts_/$accountId/users/',
   )()
+const AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyImport =
+  createFileRoute(
+    '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/',
+  )()
 
 // Create/Update Routes
 
@@ -101,6 +105,19 @@ const AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute =
     ).then((d) => d.Route),
   )
 
+const AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute =
+  AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyImport.update(
+    {
+      id: '/installations_/$installationId/accounts_/$accountId/k8s-access/',
+      path: '/installations/$installationId/accounts/$accountId/k8s-access/',
+      getParentRoute: () => AppRoute,
+    } as any,
+  ).lazy(() =>
+    import(
+      './pages/_app/installations_/$installationId/accounts_/$accountId/k8s-access/index.lazy'
+    ).then((d) => d.Route),
+  )
+
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
@@ -154,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInstallationsInstallationIdLimitsIndexLazyImport
       parentRoute: typeof AppImport
     }
+    '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/': {
+      id: '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/'
+      path: '/installations/$installationId/accounts/$accountId/k8s-access'
+      fullPath: '/installations/$installationId/accounts/$accountId/k8s-access'
+      preLoaderRoute: typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyImport
+      parentRoute: typeof AppImport
+    }
     '/_app/installations_/$installationId/accounts_/$accountId/users/': {
       id: '/_app/installations_/$installationId/accounts_/$accountId/users/'
       path: '/installations/$installationId/accounts/$accountId/users'
@@ -172,6 +196,7 @@ interface AppRouteChildren {
   AppInstallationsIndexLazyRoute: typeof AppInstallationsIndexLazyRoute
   AppInstallationsInstallationIdAccountsIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   AppInstallationsInstallationIdLimitsIndexLazyRoute: typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
 
@@ -183,6 +208,8 @@ const AppRouteChildren: AppRouteChildren = {
     AppInstallationsInstallationIdAccountsIndexLazyRoute,
   AppInstallationsInstallationIdLimitsIndexLazyRoute:
     AppInstallationsInstallationIdLimitsIndexLazyRoute,
+  AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute:
+    AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute,
   AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute:
     AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute,
 }
@@ -197,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/installations': typeof AppInstallationsIndexLazyRoute
   '/installations/$installationId/accounts': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/installations/$installationId/limits': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/k8s-access': typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/users': typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
 
@@ -207,6 +235,7 @@ export interface FileRoutesByTo {
   '/installations': typeof AppInstallationsIndexLazyRoute
   '/installations/$installationId/accounts': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/installations/$installationId/limits': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/k8s-access': typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/users': typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
 
@@ -219,6 +248,7 @@ export interface FileRoutesById {
   '/_app/installations/': typeof AppInstallationsIndexLazyRoute
   '/_app/installations_/$installationId/accounts/': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/_app/installations_/$installationId/limits/': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/': typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   '/_app/installations_/$installationId/accounts_/$accountId/users/': typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
 
@@ -232,6 +262,7 @@ export interface FileRouteTypes {
     | '/installations'
     | '/installations/$installationId/accounts'
     | '/installations/$installationId/limits'
+    | '/installations/$installationId/accounts/$accountId/k8s-access'
     | '/installations/$installationId/accounts/$accountId/users'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -241,6 +272,7 @@ export interface FileRouteTypes {
     | '/installations'
     | '/installations/$installationId/accounts'
     | '/installations/$installationId/limits'
+    | '/installations/$installationId/accounts/$accountId/k8s-access'
     | '/installations/$installationId/accounts/$accountId/users'
   id:
     | '__root__'
@@ -251,6 +283,7 @@ export interface FileRouteTypes {
     | '/_app/installations/'
     | '/_app/installations_/$installationId/accounts/'
     | '/_app/installations_/$installationId/limits/'
+    | '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/'
     | '/_app/installations_/$installationId/accounts_/$accountId/users/'
   fileRoutesById: FileRoutesById
 }
@@ -287,6 +320,7 @@ export const routeTree = rootRoute
         "/_app/installations/",
         "/_app/installations_/$installationId/accounts/",
         "/_app/installations_/$installationId/limits/",
+        "/_app/installations_/$installationId/accounts_/$accountId/k8s-access/",
         "/_app/installations_/$installationId/accounts_/$accountId/users/"
       ]
     },
@@ -311,6 +345,10 @@ export const routeTree = rootRoute
     },
     "/_app/installations_/$installationId/limits/": {
       "filePath": "_app/installations_/$installationId/limits/index.lazy.tsx",
+      "parent": "/_app"
+    },
+    "/_app/installations_/$installationId/accounts_/$accountId/k8s-access/": {
+      "filePath": "_app/installations_/$installationId/accounts_/$accountId/k8s-access/index.lazy.tsx",
       "parent": "/_app"
     },
     "/_app/installations_/$installationId/accounts_/$accountId/users/": {

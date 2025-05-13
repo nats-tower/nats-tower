@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import type { NatsAuthAccountsRecord, NatsAuthAccountsPendingRecord, TeamsRecord } from "@/lib/pocketbase-types";
-import { Check, ClockArrowUp, TrashIcon } from "lucide-react";
+import { BoxesIcon, Check, ClockArrowUp, TrashIcon } from "lucide-react";
 import { QuestionMarkIcon, InfoCircledIcon, LockOpen1Icon, DotsVerticalIcon } from "@radix-ui/react-icons";
 import type { ExpandedNatsAuthOperatorsResponse } from "@/lib/expanded-pocketbase-types";
 import { Button } from "../button";
@@ -203,7 +203,18 @@ export function getAccountsColumns(
                   <div className="grid">
                     <Button
                       variant="ghost"
-                      className="hover:bg-red-200 w-full"
+                      className="w-full flex items-center justify-start"
+                      onClick={async () => {
+                        navigate({
+                          to: `/installations/${installationId}/accounts/${account.id}/k8s-access`,
+                        });
+                      }}
+                    >
+                      <BoxesIcon className="mr-1" /> Manage Kubernetes Access
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="hover:bg-red-200 w-full flex items-center justify-start"
                       onClick={async () => {
                         if (
                           confirm("Are you sure you want to delete this account?")

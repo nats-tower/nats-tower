@@ -1,13 +1,17 @@
-import type {
-	ExpandedNatsAuthAccountsResponse,
-} from "@/lib/expanded-pocketbase-types";
+import type { ExpandedNatsAuthAccountsResponse } from "@/lib/expanded-pocketbase-types";
 import { pb } from "@/lib/pocketbase";
-import type { NatsAuthAccountsPendingRecord, NatsAuthOperatorsRecord } from "@/lib/pocketbase-types";
+import type {
+	NatsAuthAccountsPendingRecord,
+	NatsAuthAccountsResponse,
+} from "@/lib/pocketbase-types";
 import useSWR from "swr";
 
 export function getPendingAccountActions(installationId: string) {
 	return useSWR(
-		[`/installations/${installationId}/pending_account_actions`, installationId],
+		[
+			`/installations/${installationId}/pending_account_actions`,
+			installationId,
+		],
 		async ([_, pInstallationId]) => {
 			if (!pInstallationId) {
 				return;
@@ -51,7 +55,7 @@ export function getAccountById(installationId: string, accountId: string) {
 				return;
 			}
 			return pb
-				.collection<NatsAuthOperatorsRecord>("nats_auth_accounts")
+				.collection<NatsAuthAccountsResponse>("nats_auth_accounts")
 				.getFirstListItem(
 					`operator = '${pInstallationId}' && id = '${pAccountId}'`,
 				);
