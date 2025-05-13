@@ -53,7 +53,7 @@ Each application can get its own account and you can manage the resources, strea
 - Permission management
 - Resource management
 - Web based UI
-- k8s operator (soon)
+- [k8s operator](https://github.com/nats-tower/nats-tower-operator) to automatically inject credentials into workloads
 
 ## UI screenshots
 
