@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/disintegration/imaging"
+	"github.com/fatih/color"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/pocketbase/pocketbase/tools/filesystem/blob"
 	"github.com/pocketbase/pocketbase/tools/filesystem/internal/fileblob"
@@ -28,6 +30,8 @@ import (
 
 // note: the same as blob.ErrNotFound for backward compatibility with earlier versions
 var ErrNotFound = blob.ErrNotFound
+
+const metadataOriginalName = "original-filename"
 
 type System struct {
 	ctx    context.Context
@@ -107,13 +111,58 @@ func (s *System) Attributes(fileKey string) (*blob.Attributes, error) {
 	return s.bucket.Attributes(s.ctx, fileKey)
 }
 
-// GetFile returns a file content reader for the given fileKey.
+// GetReader returns a file content reader for the given fileKey.
 //
 // NB! Make sure to call Close() on the file after you are done working with it.
 //
 // If the file doesn't exist returns ErrNotFound.
-func (s *System) GetFile(fileKey string) (*blob.Reader, error) {
+func (s *System) GetReader(fileKey string) (*blob.Reader, error) {
 	return s.bucket.NewReader(s.ctx, fileKey)
+}
+
+// Deprecated: Please use GetReader(fileKey) instead.
+func (s *System) GetFile(fileKey string) (*blob.Reader, error) {
+	color.Yellow("Deprecated: Please replace GetFile with GetReader.")
+	return s.GetReader(fileKey)
+}
+
+// GetReuploadableFile constructs a new reuploadable File value
+// from the associated fileKey blob.Reader.
+//
+// If preserveName is false then the returned File.Name will have
+// a new randomly generated suffix, otherwise it will reuse the original one.
+//
+// This method could be useful in case you want to clone an existing
+// Record file and assign it to a new Record (e.g. in a Record duplicate action).
+//
+// If you simply want to copy an existing file to a new location you
+// could check the Copy(srcKey, dstKey) method.
+func (s *System) GetReuploadableFile(fileKey string, preserveName bool) (*File, error) {
+	attrs, err := s.Attributes(fileKey)
+	if err != nil {
+		return nil, err
+	}
+
+	name := path.Base(fileKey)
+	originalName := attrs.Metadata[metadataOriginalName]
+	if originalName == "" {
+		originalName = name
+	}
+
+	file := &File{}
+	file.Size = attrs.Size
+	file.OriginalName = originalName
+	file.Reader = openFuncAsReader(func() (io.ReadSeekCloser, error) {
+		return s.GetReader(fileKey)
+	})
+
+	if preserveName {
+		file.Name = name
+	} else {
+		file.Name = normalizeName(file.Reader, originalName)
+	}
+
+	return file, nil
 }
 
 // Copy copies the file stored at srcKey to dstKey.
@@ -190,7 +239,7 @@ func (s *System) UploadFile(file *File, fileKey string) error {
 	opts := &blob.WriterOptions{
 		ContentType: mt.String(),
 		Metadata: map[string]string{
-			"original-filename": originalName,
+			metadataOriginalName: originalName,
 		},
 	}
 
@@ -232,7 +281,7 @@ func (s *System) UploadMultipart(fh *multipart.FileHeader, fileKey string) error
 	opts := &blob.WriterOptions{
 		ContentType: mt.String(),
 		Metadata: map[string]string{
-			"original-filename": originalName,
+			metadataOriginalName: originalName,
 		},
 	}
 
@@ -241,7 +290,8 @@ func (s *System) UploadMultipart(fh *multipart.FileHeader, fileKey string) error
 		return err
 	}
 
-	if _, err := w.ReadFrom(f); err != nil {
+	_, err = w.ReadFrom(f)
+	if err != nil {
 		w.Close()
 		return err
 	}
@@ -379,7 +429,7 @@ const forceAttachmentParam = "download"
 // Internally this method uses [http.ServeContent] so Range requests,
 // If-Match, If-Unmodified-Since, etc. headers are handled transparently.
 func (s *System) Serve(res http.ResponseWriter, req *http.Request, fileKey string, name string) error {
-	br, readErr := s.GetFile(fileKey)
+	br, readErr := s.GetReader(fileKey)
 	if readErr != nil {
 		return readErr
 	}
@@ -451,7 +501,7 @@ func (s *System) CreateThumb(originalKey string, thumbKey, thumbSize string) err
 	}
 
 	// fetch the original
-	r, readErr := s.GetFile(originalKey)
+	r, readErr := s.GetReader(originalKey)
 	if readErr != nil {
 		return readErr
 	}

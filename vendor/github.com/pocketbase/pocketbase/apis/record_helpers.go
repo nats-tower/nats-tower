@@ -129,7 +129,9 @@ func recordAuthResponse(e *core.RequestEvent, authRecord *core.Record, token str
 			result.Meta = e.Meta
 		}
 
-		return e.JSON(http.StatusOK, result)
+		return execAfterSuccessTx(true, e.App, func() error {
+			return e.JSON(http.StatusOK, result)
+		})
 	})
 }
 
@@ -455,8 +457,8 @@ func autoResolveRecordsFlags(app core.App, records []*core.Record, requestInfo *
 	managedIds := []string{}
 
 	query := app.RecordQuery(collection).
-		Select(app.DB().QuoteSimpleColumnName(collection.Name) + ".id").
-		AndWhere(dbx.In(app.DB().QuoteSimpleColumnName(collection.Name)+".id", recordIds...))
+		Select(app.ConcurrentDB().QuoteSimpleColumnName(collection.Name) + ".id").
+		AndWhere(dbx.In(app.ConcurrentDB().QuoteSimpleColumnName(collection.Name)+".id", recordIds...))
 
 	resolver := core.NewRecordFieldResolver(app, collection, requestInfo, true)
 	expr, err := search.FilterData(*collection.ManageRule).BuildExpr(resolver)
@@ -533,6 +535,27 @@ func firstApiError(errs ...error) *router.ApiError {
 	}
 
 	return router.NewInternalServerError("", errors.Join(errs...))
+}
+
+// execAfterSuccessTx ensures that fn is executed only after a succesul transaction.
+//
+// If the current app instance is not a transactional or checkTx is false,
+// then fn is directly executed.
+//
+// It could be usually used to allow propagating an error or writing
+// custom response from within the wrapped transaction block.
+func execAfterSuccessTx(checkTx bool, app core.App, fn func() error) error {
+	if txInfo := app.TxInfo(); txInfo != nil && checkTx {
+		txInfo.OnComplete(func(txErr error) error {
+			if txErr == nil {
+				return fn()
+			}
+			return nil
+		})
+		return nil
+	}
+
+	return fn()
 }
 
 // -------------------------------------------------------------------
