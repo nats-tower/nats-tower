@@ -37,6 +37,14 @@ const AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyImport =
   createFileRoute(
     '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/',
   )()
+const AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyImport =
+  createFileRoute(
+    '/_app/installations_/$installationId/accounts_/$accountId/imports/',
+  )()
+const AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyImport =
+  createFileRoute(
+    '/_app/installations_/$installationId/accounts_/$accountId/exports/',
+  )()
 
 // Create/Update Routes
 
@@ -118,6 +126,28 @@ const AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute =
     ).then((d) => d.Route),
   )
 
+const AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute =
+  AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyImport.update({
+    id: '/installations_/$installationId/accounts_/$accountId/imports/',
+    path: '/installations/$installationId/accounts/$accountId/imports/',
+    getParentRoute: () => AppRoute,
+  } as any).lazy(() =>
+    import(
+      './pages/_app/installations_/$installationId/accounts_/$accountId/imports/index.lazy'
+    ).then((d) => d.Route),
+  )
+
+const AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute =
+  AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyImport.update({
+    id: '/installations_/$installationId/accounts_/$accountId/exports/',
+    path: '/installations/$installationId/accounts/$accountId/exports/',
+    getParentRoute: () => AppRoute,
+  } as any).lazy(() =>
+    import(
+      './pages/_app/installations_/$installationId/accounts_/$accountId/exports/index.lazy'
+    ).then((d) => d.Route),
+  )
+
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
@@ -171,6 +201,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInstallationsInstallationIdLimitsIndexLazyImport
       parentRoute: typeof AppImport
     }
+    '/_app/installations_/$installationId/accounts_/$accountId/exports/': {
+      id: '/_app/installations_/$installationId/accounts_/$accountId/exports/'
+      path: '/installations/$installationId/accounts/$accountId/exports'
+      fullPath: '/installations/$installationId/accounts/$accountId/exports'
+      preLoaderRoute: typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyImport
+      parentRoute: typeof AppImport
+    }
+    '/_app/installations_/$installationId/accounts_/$accountId/imports/': {
+      id: '/_app/installations_/$installationId/accounts_/$accountId/imports/'
+      path: '/installations/$installationId/accounts/$accountId/imports'
+      fullPath: '/installations/$installationId/accounts/$accountId/imports'
+      preLoaderRoute: typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyImport
+      parentRoute: typeof AppImport
+    }
     '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/': {
       id: '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/'
       path: '/installations/$installationId/accounts/$accountId/k8s-access'
@@ -196,6 +240,8 @@ interface AppRouteChildren {
   AppInstallationsIndexLazyRoute: typeof AppInstallationsIndexLazyRoute
   AppInstallationsInstallationIdAccountsIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   AppInstallationsInstallationIdLimitsIndexLazyRoute: typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
+  AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
@@ -208,6 +254,10 @@ const AppRouteChildren: AppRouteChildren = {
     AppInstallationsInstallationIdAccountsIndexLazyRoute,
   AppInstallationsInstallationIdLimitsIndexLazyRoute:
     AppInstallationsInstallationIdLimitsIndexLazyRoute,
+  AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute:
+    AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute,
+  AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute:
+    AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute,
   AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute:
     AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute,
   AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute:
@@ -224,6 +274,8 @@ export interface FileRoutesByFullPath {
   '/installations': typeof AppInstallationsIndexLazyRoute
   '/installations/$installationId/accounts': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/installations/$installationId/limits': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/exports': typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/imports': typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/k8s-access': typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/users': typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
@@ -235,6 +287,8 @@ export interface FileRoutesByTo {
   '/installations': typeof AppInstallationsIndexLazyRoute
   '/installations/$installationId/accounts': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/installations/$installationId/limits': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/exports': typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/imports': typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/k8s-access': typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/users': typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
@@ -248,6 +302,8 @@ export interface FileRoutesById {
   '/_app/installations/': typeof AppInstallationsIndexLazyRoute
   '/_app/installations_/$installationId/accounts/': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/_app/installations_/$installationId/limits/': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/_app/installations_/$installationId/accounts_/$accountId/exports/': typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
+  '/_app/installations_/$installationId/accounts_/$accountId/imports/': typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/': typeof AppInstallationsInstallationIdAccountsAccountIdK8sAccessIndexLazyRoute
   '/_app/installations_/$installationId/accounts_/$accountId/users/': typeof AppInstallationsInstallationIdAccountsAccountIdUsersIndexLazyRoute
 }
@@ -262,6 +318,8 @@ export interface FileRouteTypes {
     | '/installations'
     | '/installations/$installationId/accounts'
     | '/installations/$installationId/limits'
+    | '/installations/$installationId/accounts/$accountId/exports'
+    | '/installations/$installationId/accounts/$accountId/imports'
     | '/installations/$installationId/accounts/$accountId/k8s-access'
     | '/installations/$installationId/accounts/$accountId/users'
   fileRoutesByTo: FileRoutesByTo
@@ -272,6 +330,8 @@ export interface FileRouteTypes {
     | '/installations'
     | '/installations/$installationId/accounts'
     | '/installations/$installationId/limits'
+    | '/installations/$installationId/accounts/$accountId/exports'
+    | '/installations/$installationId/accounts/$accountId/imports'
     | '/installations/$installationId/accounts/$accountId/k8s-access'
     | '/installations/$installationId/accounts/$accountId/users'
   id:
@@ -283,6 +343,8 @@ export interface FileRouteTypes {
     | '/_app/installations/'
     | '/_app/installations_/$installationId/accounts/'
     | '/_app/installations_/$installationId/limits/'
+    | '/_app/installations_/$installationId/accounts_/$accountId/exports/'
+    | '/_app/installations_/$installationId/accounts_/$accountId/imports/'
     | '/_app/installations_/$installationId/accounts_/$accountId/k8s-access/'
     | '/_app/installations_/$installationId/accounts_/$accountId/users/'
   fileRoutesById: FileRoutesById
@@ -320,6 +382,8 @@ export const routeTree = rootRoute
         "/_app/installations/",
         "/_app/installations_/$installationId/accounts/",
         "/_app/installations_/$installationId/limits/",
+        "/_app/installations_/$installationId/accounts_/$accountId/exports/",
+        "/_app/installations_/$installationId/accounts_/$accountId/imports/",
         "/_app/installations_/$installationId/accounts_/$accountId/k8s-access/",
         "/_app/installations_/$installationId/accounts_/$accountId/users/"
       ]
@@ -345,6 +409,14 @@ export const routeTree = rootRoute
     },
     "/_app/installations_/$installationId/limits/": {
       "filePath": "_app/installations_/$installationId/limits/index.lazy.tsx",
+      "parent": "/_app"
+    },
+    "/_app/installations_/$installationId/accounts_/$accountId/exports/": {
+      "filePath": "_app/installations_/$installationId/accounts_/$accountId/exports/index.lazy.tsx",
+      "parent": "/_app"
+    },
+    "/_app/installations_/$installationId/accounts_/$accountId/imports/": {
+      "filePath": "_app/installations_/$installationId/accounts_/$accountId/imports/index.lazy.tsx",
       "parent": "/_app"
     },
     "/_app/installations_/$installationId/accounts_/$accountId/k8s-access/": {

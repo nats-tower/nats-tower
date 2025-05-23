@@ -169,9 +169,7 @@ function Users() {
 									</DialogHeader>
 									<div className="flex items-center space-x-2 mt-2">
 										<div className="grid flex-1 gap-2">
-											<Label htmlFor="name">
-												Name
-											</Label>
+											<Label htmlFor="name">Name</Label>
 											<Input
 												id="name"
 												defaultValue=""
@@ -182,9 +180,7 @@ function Users() {
 									</div>
 									<div className="flex items-center space-x-2 mt-2">
 										<div className="grid flex-1 gap-2">
-											<Label htmlFor="description">
-												Description
-											</Label>
+											<Label htmlFor="description">Description</Label>
 											<Input
 												id="description"
 												defaultValue=""

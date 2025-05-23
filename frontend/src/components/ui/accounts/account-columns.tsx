@@ -214,6 +214,28 @@ export function getAccountsColumns(
 											className="w-full flex items-center justify-start"
 											onClick={async () => {
 												navigate({
+													to: `/installations/${installationId}/accounts/${account.id}/exports`,
+												});
+											}}
+										>
+											<BoxesIcon className="mr-1" /> Manage Exports
+										</Button>
+										<Button
+											variant="ghost"
+											className="w-full flex items-center justify-start"
+											onClick={async () => {
+												navigate({
+													to: `/installations/${installationId}/accounts/${account.id}/imports`,
+												});
+											}}
+										>
+											<BoxesIcon className="mr-1" /> Manage Imports
+										</Button>
+										<Button
+											variant="ghost"
+											className="w-full flex items-center justify-start"
+											onClick={async () => {
+												navigate({
 													to: `/installations/${installationId}/accounts/${account.id}/k8s-access`,
 												});
 											}}

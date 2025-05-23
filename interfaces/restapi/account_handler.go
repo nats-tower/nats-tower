@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	jwt "github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/pocketbase/pocketbase/core"
@@ -15,83 +16,6 @@ import (
 	"github.com/nats-tower/nats-tower/interfaces/restapi/utils"
 	"github.com/nats-tower/nats-tower/natsauth"
 )
-
-// const (
-// 	// format: stream_list.<installation_id>.<account_id>
-// 	SubscriptionTypeStreamListPrefix = "stream_list."
-// )
-
-// func InitAccountsAPI(e *core.ServeEvent) {
-
-// 	connectionLock := sync.Mutex{}
-// 	activeConnections := map[string]*AccountConnection{}
-
-// 	e.App.OnRealtimeSubscribeRequest().BindFunc(func(e *core.RealtimeSubscribeRequestEvent) error {
-// 		for _, subscription := range e.Subscriptions {
-// 			if !strings.HasPrefix(subscription, SubscriptionTypeStreamListPrefix) {
-// 				continue
-// 			}
-
-// 			// parse installation_id and account_id
-// 			parts := strings.Split(subscription, ".")
-// 			if len(parts) != 3 {
-// 				continue
-// 			}
-
-// 			installationID := parts[1]
-// 			accountID := parts[2]
-
-// 		}
-// 		return nil
-// 	})
-// }
-
-// func checkAuthorization(client subscriptions.Client) bool {
-// 	// TODO: check authorization
-// 	return true
-// }
-
-// func notify(app core.App, subscription string, data any) error {
-// 	rawData, err := json.Marshal(data)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	message := subscriptions.Message{
-// 		Name: subscription,
-// 		Data: rawData,
-// 	}
-
-// 	group := new(errgroup.Group)
-
-// 	chunks := app.SubscriptionsBroker().ChunkedClients(300)
-
-// 	for _, chunk := range chunks {
-// 		group.Go(func() error {
-// 			for _, client := range chunk {
-// 				if !client.HasSubscription(subscription) {
-// 					continue
-// 				}
-
-// 				if !checkAuthorization(client) {
-// 					continue
-// 				}
-
-// 				client.Send(message)
-// 			}
-
-// 			return nil
-// 		})
-// 	}
-
-// 	return group.Wait()
-// }
-
-// type AccountConnection struct {
-// 	ctx    context.Context
-// 	cancel context.CancelFunc
-// 	nc     *nats.Conn
-// }
 
 type accountDetailResponse struct {
 	Data  *server.AccountDetail `json:"data"`
@@ -235,121 +159,144 @@ func GetStreamList(e *core.RequestEvent, installationID, accountID string) error
 	return e.JSON(http.StatusOK, currentState)
 }
 
-// func StreamStreamCount(e *core.RequestEvent, eventChannel chan *SSEEvent) {
-// 	installationID := e.Request.URL.Query().Get("installation_id")
-// 	accountID := e.Request.URL.Query().Get("account_id")
+type accountExportList struct {
+	AccountExports map[string][]*jwt.Export `json:"account_exports"`
+}
 
-// 	if installationID == "" || accountID == "" {
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: fmt.Errorf("installation_id and account_id are required"),
-// 		})
-// 		return
-// 	}
-// 	natsauthModule := utils.MustGetNATSAuth(e)
+func ListInstallationExports(e *core.RequestEvent, installationID string) error {
 
-// 	sysUserAuth, err := natsauthModule.GetSysUserByID(e.Request.Context(), installationID)
-// 	if err != nil {
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: err,
-// 		})
-// 		return
-// 	}
+	if installationID == "" {
+		return e.Error(http.StatusBadRequest, "installation_id is required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
 
-// 	record, err := e.App.FindRecordById("nats_auth_operators", installationID)
-// 	if err != nil {
-// 		e.App.Logger().Error("Failed to find installation",
-// 			slog.String("id", installationID),
-// 			slog.String("error", err.Error()))
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: err,
-// 		})
-// 		return
-// 	}
+	exports, err := natsauthModule.ListPublicExports(e.Request.Context(), installationID)
 
-// 	installation, err := natsauth.GetOperatorFromRecord(record)
-// 	if err != nil {
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: err,
-// 		})
-// 		return
-// 	}
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to list public installation exports", err)
+	}
 
-// 	accountRecord, err := e.App.FindRecordById("nats_auth_accounts", accountID)
-// 	if err != nil {
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: err,
-// 		})
-// 		return
-// 	}
+	return e.JSON(http.StatusOK, &accountExportList{
+		AccountExports: exports,
+	})
+}
 
-// 	account, err := natsauth.GetAccountFromRecord(accountRecord, installation.URL)
-// 	if err != nil {
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: err,
-// 		})
-// 		return
-// 	}
+type exportList struct {
+	Exports []*jwt.Export `json:"exports"`
+}
 
-// 	nc, err := nats.Connect(sysUserAuth.URL, nats.UserJWTAndSeed(sysUserAuth.JWT, sysUserAuth.Seed))
-// 	if err != nil {
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: err,
-// 		})
-// 		return
-// 	}
-// 	defer nc.Close()
+func ListAccountExports(e *core.RequestEvent, installationID, accountID string) error {
 
-// 	msgChannel, err := natsauth.RequestMultipleChannel(e.Request.Context(),
-// 		nc,
-// 		fmt.Sprintf("$SYS.REQ.ACCOUNT.%s.JSZ", account.PublicKey),
-// 		[]byte(`{"streams":true}`),
-// 		natsauth.RequestMultipleChannelOptions{})
-// 	if err != nil {
-// 		WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 			Error: err,
-// 		})
-// 		return
-// 	}
-// 	currentState := &streamList{}
-// 	for {
-// 		select {
-// 		case <-e.Request.Context().Done():
-// 			return
-// 		case msg := <-msgChannel:
-// 			resp := &accountDetailResponse{}
-// 			err = json.Unmarshal(msg.Data, resp)
-// 			if err != nil {
-// 				WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 					Error: err,
-// 				})
-// 				return
-// 			}
-// 			if resp.Error != nil && (strings.Contains(resp.Error.Description, "not jetstream enabled") || strings.Contains(resp.Error.Description, "not found")) {
-// 				continue // ignore
-// 			}
-// 			if resp.Data == nil {
-// 				continue // ignore
-// 			}
+	if installationID == "" || accountID == "" {
+		return e.Error(http.StatusBadRequest, "installation_id and account_id are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
 
-// 			// merge with existing streams
-// 			for _, stream := range resp.Data.Streams {
-// 				found := false
-// 				for _, existingStream := range currentState.Streams {
-// 					if existingStream.Name == stream.Name {
-// 						found = true
-// 						break
-// 					}
-// 				}
-// 				if !found {
-// 					currentState.Streams = append(currentState.Streams, stream)
-// 				}
-// 			}
+	exports, err := natsauthModule.ListAccountExports(e.Request.Context(), accountID)
 
-// 			WriteSSEEvent(e.Request.Context(), eventChannel, &SSEEvent{
-// 				Event: "stream_count",
-// 				Data:  fmt.Sprintf("<span>%d</span>", len(currentState.Streams)),
-// 			})
-// 		}
-// 	}
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to list exports", err)
+	}
 
-// }
+	return e.JSON(http.StatusOK, &exportList{
+		Exports: exports,
+	})
+}
+
+func UpsertAccountExport(e *core.RequestEvent, installationID, accountID string) error {
+
+	if installationID == "" || accountID == "" {
+		return e.Error(http.StatusBadRequest, "installation_id and account_id are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
+
+	req := jwt.Export{}
+	err := e.BindBody(&req)
+	if err != nil {
+		return e.Error(http.StatusBadRequest, "Invalid request body", err)
+	}
+
+	err = natsauthModule.UpsertAccountExport(e.Request.Context(), accountID, &req)
+
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to upsert account export", err)
+	}
+
+	return e.JSON(http.StatusOK, map[string]any{})
+}
+
+func DeleteAccountExport(e *core.RequestEvent, installationID, accountID, exportName string) error {
+
+	if installationID == "" || accountID == "" || exportName == "" {
+		return e.Error(http.StatusBadRequest, "installation_id, account_id and export_name are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
+
+	err := natsauthModule.DeleteAccountExport(e.Request.Context(), accountID, exportName)
+
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to delete account export", err)
+	}
+
+	return e.JSON(http.StatusOK, map[string]any{})
+}
+
+type importList struct {
+	Imports []*jwt.Import `json:"imports"`
+}
+
+func ListAccountImports(e *core.RequestEvent, installationID, accountID string) error {
+
+	if installationID == "" || accountID == "" {
+		return e.Error(http.StatusBadRequest, "installation_id and account_id are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
+
+	imports, err := natsauthModule.ListAccountImports(e.Request.Context(), accountID)
+
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to list imports", err)
+	}
+
+	return e.JSON(http.StatusOK, &importList{
+		Imports: imports,
+	})
+}
+
+func UpsertAccountImport(e *core.RequestEvent, installationID, accountID string) error {
+
+	if installationID == "" || accountID == "" {
+		return e.Error(http.StatusBadRequest, "installation_id and account_id are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
+
+	req := jwt.Import{}
+	err := e.BindBody(&req)
+	if err != nil {
+		return e.Error(http.StatusBadRequest, "Invalid request body", err)
+	}
+
+	err = natsauthModule.UpsertAccountImport(e.Request.Context(), accountID, &req)
+
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to upsert account import", err)
+	}
+
+	return e.JSON(http.StatusOK, map[string]any{})
+}
+
+func DeleteAccountImport(e *core.RequestEvent, installationID, accountID, importName string) error {
+
+	if installationID == "" || accountID == "" || importName == "" {
+		return e.Error(http.StatusBadRequest, "installation_id, account_id and import_name are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
+
+	err := natsauthModule.DeleteAccountImport(e.Request.Context(), accountID, importName)
+
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to delete account import", err)
+	}
+
+	return e.JSON(http.StatusOK, map[string]any{})
+}

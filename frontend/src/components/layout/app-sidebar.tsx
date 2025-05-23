@@ -1,7 +1,12 @@
 "use client";
 
 import type * as React from "react";
-import { FoldVertical, KeyRound, LayoutDashboard, type LucideIcon } from "lucide-react";
+import {
+	FoldVertical,
+	KeyRound,
+	LayoutDashboard,
+	type LucideIcon,
+} from "lucide-react";
 
 import { NavMain } from "@/components/layout/nav-main";
 import { NavUser } from "@/components/layout/nav-user";
@@ -41,12 +46,14 @@ export function getNavInfo(resolvedHref: string | undefined) {
 
 	if (resolvedHref === "/installations" || resolvedHref === "/installations/") {
 		return {
-			breadcrumbs: [{
-				name: "Installations",
-				url: "/installations",
-			}],
+			breadcrumbs: [
+				{
+					name: "Installations",
+					url: "/installations",
+				},
+			],
 			items: [],
-		};		
+		};
 	}
 
 	const navInfo: {
@@ -114,6 +121,20 @@ export function getNavInfo(resolvedHref: string | undefined) {
 						breadcrumb: {
 							name: "Kubernetes Access",
 							url: "/installations/$installationId/accounts/$accountId/k8s-access",
+						},
+					},
+					{
+						path: "/installations/$installationId/accounts/$accountId/exports",
+						breadcrumb: {
+							name: "Exports",
+							url: "/installations/$installationId/accounts/$accountId/exports",
+						},
+					},
+					{
+						path: "/installations/$installationId/accounts/$accountId/imports",
+						breadcrumb: {
+							name: "Imports",
+							url: "/installations/$installationId/accounts/$accountId/imports",
 						},
 					},
 				],
