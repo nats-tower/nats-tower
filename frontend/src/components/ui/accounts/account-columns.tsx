@@ -4,7 +4,7 @@ import type {
 	NatsAuthAccountsPendingRecord,
 	TeamsRecord,
 } from "@/lib/pocketbase-types";
-import { BoxesIcon, Check, ClockArrowUp, TrashIcon } from "lucide-react";
+import { BoxesIcon, Check, ClockArrowUp, ImportIcon, TrashIcon, UploadIcon } from "lucide-react";
 import {
 	QuestionMarkIcon,
 	InfoCircledIcon,
@@ -218,7 +218,7 @@ export function getAccountsColumns(
 												});
 											}}
 										>
-											<BoxesIcon className="mr-1" /> Manage Exports
+											<UploadIcon className="mr-1" /> Manage Exports
 										</Button>
 										<Button
 											variant="ghost"
@@ -229,7 +229,7 @@ export function getAccountsColumns(
 												});
 											}}
 										>
-											<BoxesIcon className="mr-1" /> Manage Imports
+											<ImportIcon className="mr-1" /> Manage Imports
 										</Button>
 										<Button
 											variant="ghost"
