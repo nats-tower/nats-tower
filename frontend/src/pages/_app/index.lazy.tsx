@@ -7,10 +7,15 @@ export const Route = createLazyFileRoute("/_app/")({
 
 function Home() {
 	const installation = useInstallation();
-  
-  if (installation.installationId === null) {
-    return <Navigate to="/installations" />;
-  }
 
-  return <Navigate to="/installations/$installationId" params={{ installationId: installation.installationId }} />;
+	if (installation.installationId === null) {
+		return <Navigate to="/installations" />;
+	}
+
+	return (
+		<Navigate
+			to="/installations/$installationId"
+			params={{ installationId: installation.installationId }}
+		/>
+	);
 }

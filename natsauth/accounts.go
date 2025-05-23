@@ -2,6 +2,8 @@ package natsauth
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 
 	jwt "github.com/nats-io/jwt/v2"
@@ -224,4 +226,549 @@ func (m *NATSAuthModule) UpsertAccountAuth(ctx context.Context,
 	}
 
 	return &res, nil
+}
+
+func (m *NATSAuthModule) UpsertAccountExport(ctx context.Context,
+	accountID string,
+	exp *jwt.Export) error {
+	err := m.cfg.App.RunInTransaction(func(txDao core.App) error {
+		if exp.Name == "" {
+			return errors.New("export name is required")
+		}
+
+		accRecord, err := txDao.FindRecordById("nats_auth_accounts", accountID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				m.logger.ErrorContext(ctx, "Could not find account",
+					slog.String("account_id", accountID),
+					slog.String("export_name", exp.Name),
+					slog.String("error", err.Error()))
+				return ErrNotFound
+			} else {
+				return err
+			}
+		}
+
+		accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not decode account claims",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exp.Name),
+				slog.String("error", err.Error()))
+			return err
+		}
+		existingExport := false
+
+		for i, accExp := range accountClaims.Exports {
+			if accExp.Name == exp.Name {
+				accountClaims.Exports[i] = exp
+				existingExport = true
+				m.logger.InfoContext(ctx, "Updating existing export",
+					slog.String("account_id", accountID),
+					slog.String("export_name", exp.Name),
+					slog.String("export_subject", string(exp.Subject)))
+				break
+			}
+		}
+
+		if !existingExport {
+			m.logger.InfoContext(ctx, "Adding new export",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exp.Name),
+				slog.String("export_subject", string(exp.Subject)))
+			accountClaims.Exports.Add(exp)
+		}
+		results := jwt.CreateValidationResults()
+		accountClaims.Exports.Validate(results)
+		if len(results.Issues) > 0 {
+			for _, issue := range results.Issues {
+				if issue.Blocking {
+					m.logger.ErrorContext(ctx, "Export is not valid",
+						slog.String("account_id", accountID),
+						slog.String("export_name", exp.Name),
+						slog.String("error", issue.Description))
+					return errors.New(issue.Description)
+				}
+			}
+		}
+		// find operator to sign these updates
+		operatorRecord, err := txDao.FindRecordById("nats_auth_operators", accRecord.GetString("operator"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not find operator for account",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exp.Name),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("sign_seed")))
+		if err != nil {
+			return err
+		}
+		jwtValue, err := accountClaims.Encode(operatorKP)
+		if err != nil {
+			return err
+		}
+
+		accRecord.Set("jwt", jwtValue)
+
+		err = txDao.Save(accRecord)
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not save account",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exp.Name),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		m.logger.InfoContext(ctx, "Export updated successfully",
+			slog.String("account_id", accountID),
+			slog.String("export_name", exp.Name),
+			slog.String("export_subject", string(exp.Subject)))
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *NATSAuthModule) DeleteAccountExport(ctx context.Context,
+	accountID string,
+	exportName string) error {
+	err := m.cfg.App.RunInTransaction(func(txDao core.App) error {
+		if exportName == "" {
+			return errors.New("export name is required")
+		}
+
+		accRecord, err := txDao.FindRecordById("nats_auth_accounts", accountID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				m.logger.ErrorContext(ctx, "Could not find account",
+					slog.String("account_id", accountID),
+					slog.String("export_name", exportName),
+					slog.String("error", err.Error()))
+				return ErrNotFound
+			} else {
+				return err
+			}
+		}
+
+		accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not decode account claims",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exportName),
+				slog.String("error", err.Error()))
+			return err
+		}
+		existingExport := false
+
+		var newExports []*jwt.Export
+
+		for _, accExp := range accountClaims.Exports {
+			if accExp.Name == exportName {
+				existingExport = true
+				m.logger.InfoContext(ctx, "Removing existing export",
+					slog.String("account_id", accountID),
+					slog.String("export_name", exportName),
+					slog.String("export_subject", string(accExp.Subject)))
+				continue
+			}
+			newExports = append(newExports, accExp)
+		}
+
+		if !existingExport {
+			m.logger.InfoContext(ctx, "Could not delete Export: not found",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exportName))
+			return nil
+		}
+
+		accountClaims.Exports = newExports
+
+		// find operator to sign these updates
+		operatorRecord, err := txDao.FindRecordById("nats_auth_operators", accRecord.GetString("operator"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not find operator for account",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exportName),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("sign_seed")))
+		if err != nil {
+			return err
+		}
+		jwtValue, err := accountClaims.Encode(operatorKP)
+		if err != nil {
+			return err
+		}
+
+		accRecord.Set("jwt", jwtValue)
+
+		err = txDao.Save(accRecord)
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not save account",
+				slog.String("account_id", accountID),
+				slog.String("export_name", exportName),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		m.logger.InfoContext(ctx, "Export removed successfully",
+			slog.String("account_id", accountID),
+			slog.String("export_name", exportName))
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *NATSAuthModule) ListAccountExports(ctx context.Context,
+	accountID string) ([]*jwt.Export, error) {
+
+	exports := make([]*jwt.Export, 0)
+
+	accRecord, err := m.cfg.App.FindRecordById("nats_auth_accounts", accountID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			m.logger.ErrorContext(ctx, "Could not find account",
+				slog.String("account_id", accountID),
+				slog.String("error", err.Error()))
+			return nil, ErrNotFound
+		} else {
+			return nil, err
+		}
+	}
+
+	accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+	if err != nil {
+		m.logger.ErrorContext(ctx, "Could not decode account claims",
+			slog.String("account_id", accountID),
+			slog.String("error", err.Error()))
+		return nil, err
+	}
+
+	for _, accExp := range accountClaims.Exports {
+		exports = append(exports, accExp)
+	}
+
+	return exports, nil
+}
+
+func (m *NATSAuthModule) ListPublicExports(ctx context.Context,
+	operatorID string) (map[string][]*jwt.Export, error) {
+
+	exports := make(map[string][]*jwt.Export) // account name -> exports
+
+	accRecords, err := m.cfg.App.FindAllRecords("nats_auth_accounts", dbx.HashExp{
+		"operator": operatorID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, accRecord := range accRecords {
+		accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not decode account claims",
+				slog.String("account_id", accRecord.Id),
+				slog.String("error", err.Error()))
+			return nil, err
+		}
+
+		for _, accExp := range accountClaims.Exports {
+			if accExp.TokenReq {
+				continue // skip token requests, as they are not public
+			}
+
+			if _, ok := exports[accRecord.GetString("name")]; !ok {
+				exports[accRecord.GetString("name")] = make([]*jwt.Export, 0)
+			}
+
+			accExports := exports[accRecord.GetString("name")]
+			accExports = append(accExports, accExp)
+			exports[accRecord.GetString("name")] = accExports
+		}
+	}
+
+	return exports, nil
+}
+
+func (m *NATSAuthModule) UpsertAccountImport(ctx context.Context,
+	accountID string,
+	imp *jwt.Import) error {
+	err := m.cfg.App.RunInTransaction(func(txDao core.App) error {
+		if imp.Name == "" {
+			return errors.New("import name is required")
+		}
+
+		accRecord, err := txDao.FindRecordById("nats_auth_accounts", accountID)
+		if err != nil {
+			return err
+		}
+
+		srcAccounts, err := txDao.FindAllRecords("nats_auth_accounts", dbx.HashExp{
+			"name":     imp.Account,
+			"operator": accRecord.GetString("operator"),
+		})
+		if err != nil {
+			return err
+		}
+
+		if len(srcAccounts) == 0 {
+			// let's see if the account name is a public key
+			srcAccounts, err = txDao.FindAllRecords("nats_auth_accounts", dbx.HashExp{
+				"public_key": imp.Account,
+				"operator":   accRecord.GetString("operator"),
+			})
+			if err != nil {
+				return err
+			}
+			if len(srcAccounts) == 0 {
+
+				m.logger.ErrorContext(ctx, "Could not find source account",
+					slog.String("account_id", accountID),
+					slog.String("import_name", imp.Name),
+					slog.String("error", err.Error()))
+				return ErrSourceAccountNotFound
+			}
+		}
+
+		imp.Account = srcAccounts[0].GetString("public_key")
+
+		accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not decode account claims",
+				slog.String("account_id", accountID),
+				slog.String("import_name", imp.Name),
+				slog.String("error", err.Error()))
+			return err
+		}
+		existingImport := false
+
+		for i, accImp := range accountClaims.Imports {
+			if accImp.Name == imp.Name {
+				accountClaims.Imports[i] = imp
+				existingImport = true
+				m.logger.InfoContext(ctx, "Updating existing import",
+					slog.String("account_id", accountID),
+					slog.String("import_name", imp.Name),
+					slog.String("import_subject", string(imp.Subject)))
+				break
+			}
+		}
+
+		if !existingImport {
+			m.logger.InfoContext(ctx, "Adding new import",
+				slog.String("account_id", accountID),
+				slog.String("import_name", imp.Name),
+				slog.String("import_subject", string(imp.Subject)))
+			accountClaims.Imports.Add(imp)
+		}
+		results := jwt.CreateValidationResults()
+		accountClaims.Imports.Validate(accRecord.GetString("public_key"), results)
+		if len(results.Issues) > 0 {
+			for _, issue := range results.Issues {
+				if issue.Blocking {
+					m.logger.ErrorContext(ctx, "Import is not valid",
+						slog.String("account_id", accountID),
+						slog.String("import_name", imp.Name),
+						slog.String("error", issue.Description))
+					return errors.New(issue.Description)
+				}
+			}
+		}
+		// find operator to sign these updates
+		operatorRecord, err := txDao.FindRecordById("nats_auth_operators", accRecord.GetString("operator"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not find operator for account",
+				slog.String("account_id", accountID),
+				slog.String("import_name", imp.Name),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("sign_seed")))
+		if err != nil {
+			return err
+		}
+		jwtValue, err := accountClaims.Encode(operatorKP)
+		if err != nil {
+			return err
+		}
+
+		accRecord.Set("jwt", jwtValue)
+
+		err = txDao.Save(accRecord)
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not save account",
+				slog.String("account_id", accountID),
+				slog.String("import_name", imp.Name),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		m.logger.InfoContext(ctx, "Import updated successfully",
+			slog.String("account_id", accountID),
+			slog.String("import_name", imp.Name),
+			slog.String("import_subject", string(imp.Subject)))
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *NATSAuthModule) DeleteAccountImport(ctx context.Context,
+	accountID string,
+	importName string) error {
+	err := m.cfg.App.RunInTransaction(func(txDao core.App) error {
+		if importName == "" {
+			return errors.New("import name is required")
+		}
+
+		accRecord, err := txDao.FindRecordById("nats_auth_accounts", accountID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				m.logger.ErrorContext(ctx, "Could not find account",
+					slog.String("account_id", accountID),
+					slog.String("import_name", importName),
+					slog.String("error", err.Error()))
+				return ErrNotFound
+			} else {
+				return err
+			}
+		}
+
+		accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not decode account claims",
+				slog.String("account_id", accountID),
+				slog.String("import_name", importName),
+				slog.String("error", err.Error()))
+			return err
+		}
+		existingImport := false
+
+		var newImports []*jwt.Import
+
+		for _, accImp := range accountClaims.Imports {
+			if accImp.Name == importName {
+				existingImport = true
+				m.logger.InfoContext(ctx, "Removing existing import",
+					slog.String("account_id", accountID),
+					slog.String("import_name", importName),
+					slog.String("import_subject", string(accImp.Subject)))
+				continue
+			}
+			newImports = append(newImports, accImp)
+		}
+
+		if !existingImport {
+			m.logger.InfoContext(ctx, "Could not delete Import: not found",
+				slog.String("account_id", accountID),
+				slog.String("import_name", importName))
+			return nil
+		}
+
+		accountClaims.Imports = newImports
+
+		// find operator to sign these updates
+		operatorRecord, err := txDao.FindRecordById("nats_auth_operators", accRecord.GetString("operator"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not find operator for account",
+				slog.String("account_id", accountID),
+				slog.String("import_name", importName),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("sign_seed")))
+		if err != nil {
+			return err
+		}
+		jwtValue, err := accountClaims.Encode(operatorKP)
+		if err != nil {
+			return err
+		}
+
+		accRecord.Set("jwt", jwtValue)
+
+		err = txDao.Save(accRecord)
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not save account",
+				slog.String("account_id", accountID),
+				slog.String("import_name", importName),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		m.logger.InfoContext(ctx, "Import removed successfully",
+			slog.String("account_id", accountID),
+			slog.String("import_name", importName))
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *NATSAuthModule) ListAccountImports(ctx context.Context,
+	accountID string) ([]*jwt.Import, error) {
+
+	imports := make([]*jwt.Import, 0)
+
+	accRecord, err := m.cfg.App.FindRecordById("nats_auth_accounts", accountID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			m.logger.ErrorContext(ctx, "Could not find account",
+				slog.String("account_id", accountID),
+				slog.String("error", err.Error()))
+			return nil, ErrNotFound
+		} else {
+			return nil, err
+		}
+	}
+
+	accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+	if err != nil {
+		m.logger.ErrorContext(ctx, "Could not decode account claims",
+			slog.String("account_id", accountID),
+			slog.String("error", err.Error()))
+		return nil, err
+	}
+
+	for _, accImp := range accountClaims.Imports {
+		srcAccounts, err := m.cfg.App.FindAllRecords("nats_auth_accounts", dbx.HashExp{
+			"public_key": accImp.Account,
+			"operator":   accRecord.GetString("operator"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(srcAccounts) == 0 {
+			m.logger.ErrorContext(ctx, "Could not find source account",
+				slog.String("account_id", accountID),
+				slog.String("import_name", accImp.Name),
+				slog.String("error", err.Error()))
+		} else {
+			// use the name of the source account
+			accImp.Account = srcAccounts[0].GetString("name")
+		}
+
+		imports = append(imports, accImp)
+	}
+
+	return imports, nil
 }

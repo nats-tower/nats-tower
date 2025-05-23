@@ -136,7 +136,10 @@ resolver_preload = {
 											<Button
 												variant="outline"
 												onClick={() => {
-													handleCopy(data?.url, "Installation URL copied to clipboard.");
+													handleCopy(
+														data?.url,
+														"Installation URL copied to clipboard.",
+													);
 												}}
 											>
 												<CopyIcon />
@@ -225,7 +228,10 @@ resolver_preload = {
 											<Button
 												variant="outline"
 												onClick={() => {
-													handleCopy(data?.public_key, "Identifier copied to clipboard");
+													handleCopy(
+														data?.public_key,
+														"Identifier copied to clipboard",
+													);
 												}}
 											>
 												<CopyIcon />

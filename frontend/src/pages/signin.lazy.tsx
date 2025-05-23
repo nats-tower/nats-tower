@@ -119,7 +119,11 @@ const UserAuthForm = ({ hasSocialAuth }: { hasSocialAuth: boolean }) => {
 		<>
 			{!showPasswordSignIn ? (
 				<CardDescription>
-					<Button variant="outline" className="w-full" onClick={() => setShowPasswordSignIn(true)}>
+					<Button
+						variant="outline"
+						className="w-full"
+						onClick={() => setShowPasswordSignIn(true)}
+					>
 						Use email and password to sign in.
 					</Button>
 				</CardDescription>

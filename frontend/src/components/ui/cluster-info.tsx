@@ -18,10 +18,10 @@ interface ServerStats {
 }
 
 interface ServerInfo {
-    server: {
-        id: string;
-        name: string;
-    }
+	server: {
+		id: string;
+		name: string;
+	};
 	statsz: ServerStats;
 }
 
@@ -94,8 +94,8 @@ export function ClusterInfo({ installationId }: ClusterInfoProps) {
 				},
 			);
 
-            // sort servers by name
-            server.sort((a, b) => a.server.name.localeCompare(b.server.name));
+			// sort servers by name
+			server.sort((a, b) => a.server.name.localeCompare(b.server.name));
 
 			return server;
 		},

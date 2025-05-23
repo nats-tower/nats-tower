@@ -10,15 +10,15 @@ const REDIRECT_PARAM = "redirect";
  * @param location a path to redirect to after sign-in
  */
 export const protectPage = (location?: ParsedLocation) => {
-  if (!pb.authStore.isValid) {
-    throw redirect({
-      to: "/signin",
-      search: {
-        [REDIRECT_PARAM]: location?.href,
-      },
-    });
-  }
+	if (!pb.authStore.isValid) {
+		throw redirect({
+			to: "/signin",
+			search: {
+				[REDIRECT_PARAM]: location?.href,
+			},
+		});
+	}
 };
 
 export const getRedirectAfterSignIn = () =>
-  new URLSearchParams(location.search).get(REDIRECT_PARAM) || "/";
+	new URLSearchParams(location.search).get(REDIRECT_PARAM) || "/";

@@ -1,21 +1,34 @@
 import { pb } from "@/lib/pocketbase";
-import type { NatsAuthOperatorsRecord, TeamsRecord } from "@/lib/pocketbase-types";
+import type {
+	NatsAuthOperatorsRecord,
+	TeamsRecord,
+} from "@/lib/pocketbase-types";
 import { cn } from "@/lib/utils";
 import { ChevronsUpDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../command";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "../command";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import { getTeams } from "@/services/teams";
 
 interface TeamListAddButtonProps {
-    installation: NatsAuthOperatorsRecord;
-    assignedTeams: TeamsRecord[];
-    refresh: () => void;
+	installation: NatsAuthOperatorsRecord;
+	assignedTeams: TeamsRecord[];
+	refresh: () => void;
 }
 
-export function TeamListAddButton({ installation, assignedTeams, refresh }: TeamListAddButtonProps) {
-
+export function TeamListAddButton({
+	installation,
+	assignedTeams,
+	refresh,
+}: TeamListAddButtonProps) {
 	const { data, error, isLoading } = getTeams();
 
 	if (isLoading) {

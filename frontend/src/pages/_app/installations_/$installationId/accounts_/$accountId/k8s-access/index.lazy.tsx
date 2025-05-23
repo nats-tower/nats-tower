@@ -1,8 +1,6 @@
 import { pb } from "@/lib/pocketbase";
 import { createLazyFileRoute } from "@tanstack/react-router";
-import type {
-	NatsAuthK8sAccessRecord,
-} from "@/lib/pocketbase-types";
+import type { NatsAuthK8sAccessRecord } from "@/lib/pocketbase-types";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import {
@@ -32,7 +30,8 @@ export const Route = createLazyFileRoute(
 
 function K8sAccess() {
 	const { installationId, accountId } = Route.useParams();
-	const [dialogCreateK8sAccessOpen, setDialogCreateK8sAccessOpen] = useState(false);
+	const [dialogCreateK8sAccessOpen, setDialogCreateK8sAccessOpen] =
+		useState(false);
 
 	const {
 		data: installationData,
@@ -69,8 +68,8 @@ function K8sAccess() {
 						<div className="flex-1">
 							<h2 className="text-2xl font-bold">Kubernetes Access</h2>
 							<div className="text-sm text-gray-500">
-								Manage Kubernetes access for account '{accountData?.name}' on installation
-								'{installationData?.description}'.
+								Manage Kubernetes access for account '{accountData?.name}' on
+								installation '{installationData?.description}'.
 							</div>
 						</div>
 					</div>
@@ -100,14 +99,14 @@ function K8sAccess() {
 										const cluster =
 											form.querySelector<HTMLInputElement>("#cluster")?.value;
 										const namespace =
-											form.querySelector<HTMLInputElement>(
-												"#namespace",
-											)?.value;
+											form.querySelector<HTMLInputElement>("#namespace")?.value;
 										if (!cluster || !namespace) {
 											return;
 										}
 										await pb
-											.collection<NatsAuthK8sAccessRecord>("nats_auth_k8s_access")
+											.collection<NatsAuthK8sAccessRecord>(
+												"nats_auth_k8s_access",
+											)
 											.create({
 												cluster,
 												namespace,
@@ -120,18 +119,18 @@ function K8sAccess() {
 								>
 									<DialogHeader>
 										<DialogTitle>
-											Add Kubernetes Access for installation '{installationData?.description}
-											' in account '{accountData?.name}'
+											Add Kubernetes Access for installation '
+											{installationData?.description}' in account '
+											{accountData?.name}'
 										</DialogTitle>
 										<DialogDescription>
-											Fill in the cluster and namespace for the new Kubernetes access.
+											Fill in the cluster and namespace for the new Kubernetes
+											access.
 										</DialogDescription>
 									</DialogHeader>
 									<div className="flex items-center space-x-2 mt-2">
 										<div className="grid flex-1 gap-2">
-											<Label htmlFor="cluster">
-												Cluster-ID
-											</Label>
+											<Label htmlFor="cluster">Cluster-ID</Label>
 											<Input
 												id="cluster"
 												defaultValue=""
@@ -142,9 +141,7 @@ function K8sAccess() {
 									</div>
 									<div className="flex items-center space-x-2 mt-2">
 										<div className="grid flex-1 gap-2">
-											<Label htmlFor="namespace">
-												Namespace
-											</Label>
+											<Label htmlFor="namespace">Namespace</Label>
 											<Input
 												id="namespace"
 												defaultValue=""

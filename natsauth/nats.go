@@ -20,7 +20,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound              = errors.New("not found")
+	ErrSourceAccountNotFound = errors.New("source account not found")
+	ErrInvalidData           = errors.New("invalid data provided")
 )
 
 type NATSAuthModule struct {
@@ -166,7 +168,14 @@ func CreateNATSAuthModule(ctx context.Context,
 			return err
 		}
 
-		accountClaims := jwt.NewAccountClaims(record.GetString("public_key"))
+		accountClaims, err := jwt.DecodeAccountClaims(record.GetString("jwt"))
+		if err != nil {
+			logger.ErrorContext(ctx, "Could not decode account claims",
+				slog.String("account_id", record.Id),
+				slog.String("error", err.Error()))
+			return err
+		}
+
 		accountClaims.Name = record.GetString("name")
 		for _, v := range revokeUsers {
 			logger.InfoContext(ctx, "Revoking user...",
