@@ -24,6 +24,7 @@ import { useState } from "react";
 import { Dialog, DialogTrigger } from "../ui/dialog";
 import { AddInstallationDialogContent } from "../ui/installations/add-installation-dialog";
 import { getInstallations } from "@/services/installations";
+import { pb } from "@/lib/pocketbase";
 
 function getActiveInstallation(
 	href: string | undefined,
@@ -191,35 +192,37 @@ export function InstallationSwitcher() {
 
 						<DropdownMenuSeparator />
 
-						<Dialog
-							open={dialogCreateInstallationOpen}
-							onOpenChange={setDialogCreateInstallationOpen}
-						>
-							<DialogTrigger asChild>
-								<DropdownMenuItem
-									className="gap-2 p-2 cursor-pointer"
-									onClick={(ev) => {
-										ev.stopPropagation();
-										setDialogCreateInstallationOpen(true);
-										ev.preventDefault();
-									}}
-								>
-									<div className="flex size-6 items-center justify-center rounded-md border bg-background">
-										<PlusIcon className="size-4" />
-									</div>
-									<div className="font-medium text-muted-foreground">
-										Add installation
-									</div>
-								</DropdownMenuItem>
-							</DialogTrigger>
+						{pb.authStore.isSuperuser ? (
+							<Dialog
+								open={dialogCreateInstallationOpen}
+								onOpenChange={setDialogCreateInstallationOpen}
+							>
+								<DialogTrigger asChild>
+									<DropdownMenuItem
+										className="gap-2 p-2 cursor-pointer"
+										onClick={(ev) => {
+											ev.stopPropagation();
+											setDialogCreateInstallationOpen(true);
+											ev.preventDefault();
+										}}
+									>
+										<div className="flex size-6 items-center justify-center rounded-md border bg-background">
+											<PlusIcon className="size-4" />
+										</div>
+										<div className="font-medium text-muted-foreground">
+											Add installation
+										</div>
+									</DropdownMenuItem>
+								</DialogTrigger>
 
-							<AddInstallationDialogContent
-								mutate={mutate}
-								setDialogCreateInstallationOpen={
-									setDialogCreateInstallationOpen
-								}
-							/>
-						</Dialog>
+								<AddInstallationDialogContent
+									mutate={mutate}
+									setDialogCreateInstallationOpen={
+										setDialogCreateInstallationOpen
+									}
+								/>
+							</Dialog>
+						) : undefined}
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</SidebarMenuItem>
