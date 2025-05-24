@@ -13,6 +13,7 @@ import { getInstallations } from "@/services/installations";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { AddInstallationDialogContent } from "@/components/ui/installations/add-installation-dialog";
 import { useState } from "react";
+import { pb } from "@/lib/pocketbase";
 
 export const Route = createLazyFileRoute("/_app/installations/")({
 	component: Installations,
@@ -39,29 +40,31 @@ function Installations() {
 							<CardDescription>All existing NATS installations</CardDescription>
 						</div>
 
-						<Dialog
-							open={dialogCreateInstallationOpen}
-							onOpenChange={setDialogCreateInstallationOpen}
-						>
-							<DialogTrigger asChild>
-								<Button
-									className="ml-10"
-									variant="outline"
-									onClick={() => {
-										setDialogCreateInstallationOpen(true);
-									}}
-								>
-									<PlusIcon /> Add Installation
-								</Button>
-							</DialogTrigger>
+						{pb.authStore.isSuperuser ? (
+							<Dialog
+								open={dialogCreateInstallationOpen}
+								onOpenChange={setDialogCreateInstallationOpen}
+							>
+								<DialogTrigger asChild>
+									<Button
+										className="ml-10"
+										variant="outline"
+										onClick={() => {
+											setDialogCreateInstallationOpen(true);
+										}}
+									>
+										<PlusIcon /> Add Installation
+									</Button>
+								</DialogTrigger>
 
-							<AddInstallationDialogContent
-								mutate={mutate}
-								setDialogCreateInstallationOpen={
-									setDialogCreateInstallationOpen
-								}
-							/>
-						</Dialog>
+								<AddInstallationDialogContent
+									mutate={mutate}
+									setDialogCreateInstallationOpen={
+										setDialogCreateInstallationOpen
+									}
+								/>
+							</Dialog>
+						) : undefined}
 					</CardHeader>
 
 					<CardContent>
