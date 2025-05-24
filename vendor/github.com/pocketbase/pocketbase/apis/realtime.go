@@ -213,7 +213,9 @@ func realtimeSetSubscriptions(e *core.RequestEvent) error {
 			slog.Any("subscriptions", e.Subscriptions),
 		)
 
-		return e.NoContent(http.StatusNoContent)
+		return execAfterSuccessTx(true, e.App, func() error {
+			return e.NoContent(http.StatusNoContent)
+		})
 	})
 }
 
@@ -756,7 +758,7 @@ func realtimeCanAccessRecord(
 
 	var exists int
 
-	q := app.DB().Select("(1)").
+	q := app.ConcurrentDB().Select("(1)").
 		From(record.Collection().Name).
 		AndWhere(dbx.HashExp{record.Collection().Name + ".id": record.Id})
 
