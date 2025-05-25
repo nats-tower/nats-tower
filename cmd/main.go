@@ -205,6 +205,7 @@ func main() {
 		err = restapi.RegisterAPIRoutes(ctx,
 			logger.With(slog.String("module", "RestAPI")),
 			e,
+			buildInfo,
 			natsauthModule)
 		if err != nil {
 			logger.ErrorContext(ctx, "Could not RegisterAPIRoutes", slog.String("error", err.Error()))
