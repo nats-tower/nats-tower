@@ -31,3 +31,11 @@ export interface AccountImport {
     type: "service" | "stream";
     local_subject: string;
 }
+
+export interface BuildInfo {
+    go_version: string;
+    settings: {
+        key: string;
+        value: string;
+    }[];
+}

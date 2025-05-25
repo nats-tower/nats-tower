@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, Link, LogOut } from "lucide-react";
+import { ChevronsUpDown, Info, Link, LogOut } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -22,10 +22,36 @@ import {
 	TooltipTrigger,
 	TooltipContent,
 } from "@radix-ui/react-tooltip";
+import { useState } from "react";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "../ui/dialog";
+import { Button } from "../ui/button";
+import { getBuildInfo } from "@/services/buildinfo";
 
 export function NavUser() {
 	const { isMobile } = useSidebar();
+	const [dialogBuildInfoOpen, setDialogBuildInfoOpen] = useState(false);
 	const user = pb.authStore.record;
+
+	const {
+		data: buildInfoData,
+		error: buildInfoError,
+		isLoading: buildInfoLoading,
+	} = getBuildInfo();
+
+	if (buildInfoError) return <div>failed to load</div>;
+	if (buildInfoLoading) {
+		return <div>loading...</div>;
+	}
+	if (!buildInfoData) {
+		return <div>no data</div>;
+	}
 
 	if (!user) {
 		return (
@@ -91,6 +117,16 @@ export function NavUser() {
 						<DropdownMenuItem
 							className="cursor-pointer hover:bg-gray-100"
 							onClick={() => {
+								setDialogBuildInfoOpen(true);
+							}}
+						>
+							<Info />
+							About
+						</DropdownMenuItem>
+
+						<DropdownMenuItem
+							className="cursor-pointer hover:bg-gray-100"
+							onClick={() => {
 								pb.authStore.clear();
 								location.reload();
 							}}
@@ -101,6 +137,47 @@ export function NavUser() {
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</SidebarMenuItem>
+			<Dialog open={dialogBuildInfoOpen} onOpenChange={setDialogBuildInfoOpen}>
+				<DialogContent className="sm:max-w-xl">
+					<DialogHeader>
+						<DialogTitle>Build info</DialogTitle>
+					</DialogHeader>
+					<div className="flex items-center space-x-2 mt-2">
+						<div className="grid flex-1 gap-2">
+							<p className="text-sm text-gray-700">
+								<strong>Go Version:</strong> {buildInfoData.go_version}
+							</p>
+							<p className="text-sm text-gray-700">
+								<strong>Settings:</strong>
+							</p>
+							<ul className="list-disc pl-5 text-sm text-gray-700">
+								{buildInfoData.settings.map((setting) => {
+									return (
+										<li key={setting.key} className="flex items-center">
+											<strong className="mr-1">{setting.key}:</strong>{" "}
+											<span className="relative group inline-block">
+												<span className="break-words max-w-[300px] inline-block overflow-hidden text-ellipsis whitespace-nowrap">
+													{setting.value}
+												</span>
+												<span className="invisible group-hover:visible absolute left-0 top-[calc(100%+4px)] z-10 bg-white dark:bg-gray-800 shadow-md p-2 rounded border max-w-[400px] max-h-[200px] overflow-auto break-words text-xs">
+													{setting.value}
+												</span>
+											</span>
+										</li>
+									);
+								})}
+							</ul>
+						</div>
+					</div>
+					<DialogFooter className="justify-end mt-2">
+						<DialogClose asChild>
+							<Button type="button" variant="secondary">
+								Close
+							</Button>
+						</DialogClose>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</SidebarMenu>
 	);
 }

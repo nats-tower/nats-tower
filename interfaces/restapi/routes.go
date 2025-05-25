@@ -4,16 +4,44 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/pocketbase/pocketbase/core"
 
 	"github.com/nats-tower/nats-tower/natsauth"
 )
 
+type buildInfoAPI struct {
+	GoVersion string `json:"go_version"`
+	Settings  []struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	} `json:"settings"`
+}
+
 func RegisterAPIRoutes(ctx context.Context,
 	logger *slog.Logger,
 	e *core.ServeEvent,
+	buildInfo *debug.BuildInfo,
 	natsauthModule *natsauth.NATSAuthModule) error {
+
+	// BuildInfo route
+	e.Router.GET("/api/build_info",
+		func(e *core.RequestEvent) error {
+			info := buildInfoAPI{
+				GoVersion: buildInfo.GoVersion,
+			}
+			for _, setting := range buildInfo.Settings {
+				info.Settings = append(info.Settings, struct {
+					Key   string `json:"key"`
+					Value string `json:"value"`
+				}{
+					Key:   setting.Key,
+					Value: setting.Value,
+				})
+			}
+			return e.JSON(http.StatusOK, info)
+		})
 
 	e.Router.BindFunc(func(e *core.RequestEvent) error {
 		// global middleware to inject stores, connections, etc
