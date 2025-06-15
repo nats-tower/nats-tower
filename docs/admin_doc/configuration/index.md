@@ -13,6 +13,8 @@ The configuration of the application is done through environment variables. The 
 | `DEFAULT_USER_PASSWORD`  | Password for the initial regular user   | `testtest`       |
 | `API_TOKEN`              | Authentication token for the API        | Not set          |
 
+> The `API_TOKEN` is required for the NATS Tower Operator to authenticate with the NATS Tower service. It should be set to a secure value that is not publicly accessible.
+
 ## SSO
 
 NATS Tower supports SSO through the [Pocketbase](https://pocketbase.io/) admin interface.

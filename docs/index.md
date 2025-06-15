@@ -52,7 +52,8 @@ Each application can get its own account and you can manage the resources, strea
 - Permission management
 - Resource management
 - Web based UI
-- k8s operator (soon)
+- [k8s operator](https://github.com/nats-tower/nats-tower-operator) to automatically inject credentials into workloads
+  - See [docs here](./kubernetes_integration/index.md)
 
 ## UI screenshots
 
@@ -72,7 +73,6 @@ Navigate to your newly created NATS installation and click on the `Key` button n
 
 ## Planned features
 
-- Stream/KV creation via UI
-- Import/Export via UI
 - Graph visualization of Import / Export relationships
-- k8s operator
+- User ACL management
+
