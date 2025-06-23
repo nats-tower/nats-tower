@@ -13,7 +13,6 @@ import {
 	CommandItem,
 } from "cmdk";
 import { PlusIcon, ChevronsUpDown, Check, Save } from "lucide-react";
-import { Form, useForm } from "react-hook-form";
 import { Button } from "../button";
 import {
 	Dialog,
@@ -32,6 +31,7 @@ import {
 	FormControl,
 	FormDescription,
 	FormMessage,
+    Form,
 } from "../form";
 import { Input } from "../input";
 import { getAccountImports, upsertAccountImport } from "@/services/imports";
@@ -42,6 +42,7 @@ import { getAvailableExports } from "@/services/exports";
 import { getInstallationById } from "@/services/installations";
 import { getAccountById } from "@/services/accounts";
 import type { AccountExport } from "@/lib/expanded-pocketbase-types";
+import { useForm } from "react-hook-form";
 
 const FormSchema = z.object({
 	name: z
@@ -51,7 +52,7 @@ const FormSchema = z.object({
 		.min(1, "Name is required"),
 	source_index: z.string({
 		required_error: "Please provide a source for the import.",
-	}),
+	}).min(1, "Source is required"),
 	local_subject: z.string().optional(),
 });
 
