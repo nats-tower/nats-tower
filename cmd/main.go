@@ -12,6 +12,8 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 
 	"github.com/nats-tower/nats-tower/interfaces/restapi"
 	"github.com/nats-tower/nats-tower/interfaces/teams"
@@ -35,6 +37,14 @@ func main() {
 		AddSource: os.Getenv("TRACE") == "TRUE",
 		Level:     level,
 	}))
+
+	// Create non-global registry.
+	registry := prometheus.NewRegistry()
+	// Add go runtime metrics and process collectors.
+	registry.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
 
 	buildInfo, _ := debug.ReadBuildInfo()
 
@@ -205,6 +215,7 @@ func main() {
 		err = restapi.RegisterAPIRoutes(ctx,
 			logger.With(slog.String("module", "RestAPI")),
 			e,
+			registry,
 			buildInfo,
 			natsauthModule)
 		if err != nil {
