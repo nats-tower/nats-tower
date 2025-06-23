@@ -152,6 +152,12 @@ function Users() {
 												name,
 												description,
 												account: accountId,
+                                                permissions: {
+                                                    pub: {
+                                                        allow: [">"],
+                                                        deny: ["*"],
+                                                    }
+                                                }
 											});
 
 										mutateUsers();

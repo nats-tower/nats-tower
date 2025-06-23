@@ -120,6 +120,11 @@ func generateAccountRecord(_ context.Context,
 	accountClaims := jwt.NewAccountClaims(pubKey)
 	accountClaims.Name = name
 	accountClaims.SigningKeys.Add(signPubKey)
+	s, _ := accountClaims.SigningKeys.GetScope("")
+	if s == nil {
+		s = jwt.NewUserScope()
+
+	}
 
 	if name == "SYS" {
 		// Sys Account does NOT use JetStream instead has some exports!
@@ -172,7 +177,8 @@ func generateAccountRecord(_ context.Context,
 
 func generateUserRecord(_ context.Context,
 	record *core.Record,
-	accountID, accountPubKey, accountSigningSeed string, name string) (*core.Record, error) {
+	accountID, accountPubKey, accountSigningSeed string, name string,
+	permissions *jwt.Permissions) (*core.Record, error) {
 	// create user
 	userKP, err := nkeys.CreateUser()
 	if err != nil {
@@ -196,10 +202,9 @@ func generateUserRecord(_ context.Context,
 	userClaims := jwt.NewUserClaims(pubKey)
 	userClaims.Name = name
 	userClaims.IssuerAccount = accountPubKey
-
-	// TODO move limits to separate collection
-	// TODO move permissions to separate collection
-
+	if permissions != nil {
+		userClaims.Permissions = *permissions
+	}
 	accountKP, err := nkeys.FromSeed([]byte(accountSigningSeed))
 	if err != nil {
 		return nil, err

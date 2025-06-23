@@ -63,6 +63,42 @@ func CreateNATSAuthModule(ctx context.Context,
 		cfg:    cfg,
 	}
 
+	t.cfg.App.OnRecordViewRequest().BindFunc(func(e *core.RecordRequestEvent) error {
+		if e.Record.TableName() == "nats_auth_users" {
+			e.Record.WithCustomData(true)
+			err := enrichUserRecordWithPermissions(e.Record)
+			if err != nil {
+				logger.ErrorContext(ctx, "Could not enrich user record with permissions",
+					slog.String("error", err.Error()))
+			}
+		}
+		return e.Next()
+	})
+
+	t.cfg.App.OnRecordsListRequest().BindFunc(func(e *core.RecordsListRequestEvent) error {
+		for _, record := range e.Records {
+			if record.TableName() == "nats_auth_users" {
+				record.WithCustomData(true)
+				err := enrichUserRecordWithPermissions(record)
+				if err != nil {
+					logger.ErrorContext(ctx, "Could not enrich user record with permissions",
+						slog.String("error", err.Error()))
+				}
+			}
+		}
+		return e.Next()
+	})
+
+	t.cfg.App.OnRecordCreateRequest().BindFunc(func(e *core.RecordRequestEvent) error {
+		err := enrichWriteRequestWithUserPermissions(e)
+		if err != nil {
+			logger.ErrorContext(ctx, "Could not enrich write request with user permissions",
+				slog.String("error", err.Error()))
+			return err
+		}
+		return e.Next()
+	})
+
 	t.cfg.App.OnRecordCreate().BindFunc(func(e *core.RecordEvent) error {
 		logger := logger.With(slog.String("hook", "OnModelBeforeCreate"),
 			slog.String("collection", e.Record.TableName()),
@@ -121,6 +157,13 @@ func CreateNATSAuthModule(ctx context.Context,
 			record := e.Record
 			if record.GetString("public_key") == "" {
 
+				var permissions *jwt.Permissions
+				var err error
+				permissions, err = getUserPermissionsFromRecord(record)
+				if err != nil {
+					return err
+				}
+
 				logger.InfoContext(ctx, "Creating nats user...",
 					slog.String("name", record.GetString("name")))
 
@@ -134,7 +177,8 @@ func CreateNATSAuthModule(ctx context.Context,
 					accountRecord.Id,
 					accountRecord.GetString("public_key"),
 					accountRecord.GetString("sign_seed"),
-					record.GetString("name"))
+					record.GetString("name"),
+					permissions)
 				if err != nil {
 					return err
 				}
@@ -651,7 +695,8 @@ func CreateNATSAuthModule(ctx context.Context,
 				sysAccount.ID,
 				sysAccount.PublicKey,
 				sysAccount.SigningSeed,
-				"sys")
+				"sys",
+				nil) // TODO: user options
 			if err != nil {
 				return nil, err
 			}
