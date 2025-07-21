@@ -70,6 +70,9 @@ type PubAck struct {
 	Sequence  uint64 `json:"seq"`
 	Domain    string `json:"domain,omitempty"`
 	Duplicate bool   `json:"duplicate,omitempty"`
+	Value     string `json:"val,omitempty"`
+	BatchId   string `json:"batch,omitempty"`
+	BatchSize int    `json:"count,omitempty"`
 }
 
 // io.nats.jetstream.api.v1.stream_info_request
@@ -591,6 +594,10 @@ type StreamConfig struct {
 	// this stream, unless overridden manually. They also represent the maximum values that
 	// these properties may have
 	ConsumerLimits StreamConsumerLimits `json:"consumer_limits" yaml:"consumer_limits"`
+	// AllowAtomicPublish allows atomic batch publishing into the stream.
+	AllowAtomicPublish bool `json:"allow_atomic,omitempty" yaml:"allow_atomic"`
+	// AllowMsgCounter allows a stream to use (only) counter CRDTs.
+	AllowMsgCounter bool `json:"allow_msg_counter,omitempty" yaml:"allow_msg_counter"`
 }
 
 // StreamConsumerLimits describes limits and defaults for consumers created on a stream
