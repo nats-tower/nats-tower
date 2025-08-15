@@ -468,6 +468,7 @@ func (js *jetStream) isStreamHealthy(acc *Account, sa *streamAssignment) error {
 		return errors.New("stream not found")
 	}
 
+	msetNode := mset.raftNode()
 	switch {
 	case mset.cfg.Replicas <= 1:
 		return nil // No further checks for R=1 streams
@@ -475,10 +476,12 @@ func (js *jetStream) isStreamHealthy(acc *Account, sa *streamAssignment) error {
 	case node == nil:
 		return errors.New("group node missing")
 
-	case node != mset.raftNode():
+	case msetNode == nil:
+		// Can happen when the stream's node is not yet initialized.
+		return errors.New("stream node missing")
+
+	case node != msetNode:
 		s.Warnf("Detected stream cluster node skew '%s > %s'", acc.GetName(), streamName)
-		node.Delete()
-		mset.resetClusteredState(nil)
 		return errors.New("cluster node skew detected")
 
 	case !mset.isMonitorRunning():
@@ -512,15 +515,26 @@ func (js *jetStream) isConsumerHealthy(mset *stream, consumer string, ca *consum
 		js.mu.RUnlock()
 		return errors.New("consumer assignment or group missing")
 	}
+	if ca.deleted {
+		js.mu.RUnlock()
+		return nil // No further checks, consumer was deleted in the meantime.
+	}
+	created := ca.Created
 	node := ca.Group.node
 	js.mu.RUnlock()
 
 	// Check if not running at all.
 	o := mset.lookupConsumer(consumer)
 	if o == nil {
+		if time.Since(created) < 5*time.Second {
+			// No further checks, consumer is not available yet but should be soon.
+			// We'll start erroring once we're sure this consumer is actually broken.
+			return nil
+		}
 		return errors.New("consumer not found")
 	}
 
+	oNode := o.raftNode()
 	rc, _ := o.replica()
 	switch {
 	case rc <= 1:
@@ -529,19 +543,15 @@ func (js *jetStream) isConsumerHealthy(mset *stream, consumer string, ca *consum
 	case node == nil:
 		return errors.New("group node missing")
 
-	case node != o.raftNode():
+	case oNode == nil:
+		// Can happen when the consumer's node is not yet initialized.
+		return errors.New("consumer node missing")
+
+	case node != oNode:
 		mset.mu.RLock()
 		accName, streamName := mset.acc.GetName(), mset.cfg.Name
 		mset.mu.RUnlock()
 		s.Warnf("Detected consumer cluster node skew '%s > %s > %s'", accName, streamName, consumer)
-		node.Delete()
-		o.deleteWithoutAdvisory()
-
-		// When we try to restart we nil out the node and reprocess the consumer assignment.
-		js.mu.Lock()
-		ca.Group.node = nil
-		js.mu.Unlock()
-		js.processConsumerAssignment(ca)
 		return errors.New("cluster node skew detected")
 
 	case !o.isMonitorRunning():
@@ -1225,6 +1235,8 @@ func (js *jetStream) monitorCluster() {
 			doSnapshot()
 			return
 		case <-rqch:
+			// Clean signal from shutdown routine so do best effort attempt to snapshot meta layer.
+			doSnapshot()
 			return
 		case <-qch:
 			// Clean signal from shutdown routine so do best effort attempt to snapshot meta layer.
@@ -1280,10 +1292,10 @@ func (js *jetStream) monitorCluster() {
 					} else if nb > compactSizeMin && time.Since(lastSnapTime) > minSnapDelta {
 						doSnapshot()
 					}
-					ce.ReturnToPool()
 				} else {
 					s.Warnf("Error applying JetStream cluster entries: %v", err)
 				}
+				ce.ReturnToPool()
 			}
 			aq.recycle(&ces)
 
@@ -2417,6 +2429,8 @@ func (js *jetStream) monitorStream(mset *stream, sa *streamAssignment, sendSnaps
 			doSnapshot()
 			return
 		case <-mqch:
+			// Clean signal from shutdown routine so do best effort attempt to snapshot.
+			doSnapshot()
 			return
 		case <-qch:
 			// Clean signal from shutdown routine so do best effort attempt to snapshot.
@@ -2453,6 +2467,8 @@ func (js *jetStream) monitorStream(mset *stream, sa *streamAssignment, sendSnaps
 					ne, nb = n.Applied(ce.Index)
 					ce.ReturnToPool()
 				} else {
+					// Make sure to clean up.
+					ce.ReturnToPool()
 					// Our stream was closed out from underneath of us, simply return here.
 					if err == errStreamClosed || err == errCatchupStreamStopped || err == ErrServerNotRunning {
 						aq.recycle(&ces)
@@ -2689,6 +2705,7 @@ func (js *jetStream) monitorStream(mset *stream, sa *streamAssignment, sendSnaps
 				if mset, err = acc.lookupStream(sa.Config.Name); mset != nil {
 					mset.monitorWg.Add(1)
 					defer mset.monitorWg.Done()
+					mset.checkInMonitor()
 					mset.setStreamAssignment(sa)
 					// Make sure to update our updateC which would have been nil.
 					uch = mset.updateC()
@@ -2814,6 +2831,14 @@ func (mset *stream) resetClusteredState(err error) bool {
 	stype, tierName, replicas := mset.cfg.Storage, mset.tier, mset.cfg.Replicas
 	mset.mu.RUnlock()
 
+	// The stream might already be deleted and not assigned to us anymore.
+	// In any case, don't revive the stream if it's already closed.
+	if mset.closed.Load() {
+		s.Warnf("Will not reset stream '%s > %s', stream is closed", acc, mset.name())
+		// Explicitly returning true here, we want the outside to break out of the monitoring loop as well.
+		return true
+	}
+
 	// Stepdown regardless if we are the leader here.
 	if node != nil {
 		node.StepDown()
@@ -2821,19 +2846,19 @@ func (mset *stream) resetClusteredState(err error) bool {
 
 	// If we detect we are shutting down just return.
 	if js != nil && js.isShuttingDown() {
-		s.Debugf("Will not reset stream, JetStream shutting down")
+		s.Debugf("Will not reset stream '%s > %s', JetStream shutting down", acc, mset.name())
 		return false
 	}
 
 	// Server
 	if js.limitsExceeded(stype) {
-		s.Warnf("Will not reset stream, server resources exceeded")
+		s.Warnf("Will not reset stream '%s > %s', server resources exceeded", acc, mset.name())
 		return false
 	}
 
 	// Account
 	if exceeded, _ := jsa.limitsExceeded(stype, tierName, replicas); exceeded {
-		s.Warnf("stream '%s > %s' errored, account resources exceeded", acc, mset.name())
+		s.Warnf("Stream '%s > %s' errored, account resources exceeded", acc, mset.name())
 		return false
 	}
 
@@ -3196,12 +3221,14 @@ func (js *jetStream) applyStreamEntries(mset *stream, ce *CommittedEntry, isReco
 // Returns the PeerInfo for all replicas of a raft node. This is different than node.Peers()
 // and is used for external facing advisories.
 func (s *Server) replicas(node RaftNode) []*PeerInfo {
-	now := time.Now()
 	var replicas []*PeerInfo
 	for _, rp := range node.Peers() {
 		if sir, ok := s.nodeToInfo.Load(rp.ID); ok && sir != nil {
 			si := sir.(nodeInfo)
-			pi := &PeerInfo{Peer: rp.ID, Name: si.name, Current: rp.Current, Active: now.Sub(rp.Last), Offline: si.offline, Lag: rp.Lag}
+			pi := &PeerInfo{Peer: rp.ID, Name: si.name, Current: rp.Current, Offline: si.offline, Lag: rp.Lag}
+			if !rp.Last.IsZero() {
+				pi.Active = time.Since(rp.Last)
+			}
 			replicas = append(replicas, pi)
 		}
 	}
@@ -4849,13 +4876,14 @@ func (js *jetStream) monitorConsumer(o *consumer, ca *consumerAssignment) {
 					if n.NeedSnapshot() {
 						doSnapshot(true)
 					}
-				} else if err := js.applyConsumerEntries(o, ce, isLeader); err == nil {
+					continue
+				}
+				if err := js.applyConsumerEntries(o, ce, isLeader); err == nil {
 					var ne, nb uint64
 					// We can't guarantee writes are flushed while we're shutting down. Just rely on replay during recovery.
 					if !js.isShuttingDown() {
 						ne, nb = n.Applied(ce.Index)
 					}
-					ce.ReturnToPool()
 					// If we have at least min entries to compact, go ahead and snapshot/compact.
 					if nb > 0 && ne >= compactNumMin || nb > compactSizeMin {
 						doSnapshot(false)
@@ -4863,6 +4891,7 @@ func (js *jetStream) monitorConsumer(o *consumer, ca *consumerAssignment) {
 				} else if err != errConsumerClosed {
 					s.Warnf("Error applying consumer entries to '%s > %s'", ca.Client.serviceAccount(), ca.Name)
 				}
+				ce.ReturnToPool()
 			}
 			aq.recycle(&ces)
 
@@ -5045,8 +5074,20 @@ func (js *jetStream) applyConsumerEntries(o *consumer, ce *CommittedEntry, isLea
 				o.ldt = time.Now()
 				// Need to send message to the client, since we have quorum to do so now.
 				if pmsg, ok := o.pendingDeliveries[sseq]; ok {
+					// Copy delivery subject and sequence first, as the send returns it to the pool and clears it.
+					dsubj, seq := pmsg.dsubj, pmsg.seq
 					o.outq.send(pmsg)
 					delete(o.pendingDeliveries, sseq)
+
+					// Might need to send a request timeout after sending the last replicated delivery.
+					if wd, ok := o.waitingDeliveries[dsubj]; ok && wd.seq == seq {
+						if wd.pn > 0 || wd.pb > 0 {
+							hdr := fmt.Appendf(nil, "NATS/1.0 408 Request Timeout\r\n%s: %d\r\n%s: %d\r\n\r\n", JSPullRequestPendingMsgs, wd.pn, JSPullRequestPendingBytes, wd.pb)
+							o.outq.send(newJSPubMsg(dsubj, _EMPTY_, _EMPTY_, hdr, nil, nil, 0))
+						}
+						wd.recycle()
+						delete(o.waitingDeliveries, dsubj)
+					}
 				}
 				o.mu.Unlock()
 				if err != nil {
@@ -5219,7 +5260,14 @@ func (js *jetStream) processConsumerLeaderChange(o *consumer, isLeader bool) err
 	}
 
 	if isLeader {
-		s.Noticef("JetStream cluster new consumer leader for '%s > %s > %s'", ca.Client.serviceAccount(), streamName, consumerName)
+		// Only log if the consumer is replicated and/or durable.
+		// Logging about R1 ephemerals, like KV watchers, is mostly noise since the leader will always be known.
+		o.mu.RLock()
+		isReplicated, durable := o.node != nil, o.isDurable()
+		o.mu.RUnlock()
+		if isReplicated || durable {
+			s.Noticef("JetStream cluster new consumer leader for '%s > %s > %s'", ca.Client.serviceAccount(), streamName, consumerName)
+		}
 		s.sendConsumerLeaderElectAdvisory(o)
 	} else {
 		// We are stepping down.
@@ -7250,6 +7298,7 @@ func (cc *jetStreamCluster) createGroupForConsumer(cfg *ConsumerConfig, sa *stre
 		return nil
 	}
 
+	replicas := cfg.replicas(sa.Config)
 	peers := copyStrings(sa.Group.Peers)
 	var _ss [5]string
 	active := _ss[:0]
@@ -7262,20 +7311,20 @@ func (cc *jetStreamCluster) createGroupForConsumer(cfg *ConsumerConfig, sa *stre
 			}
 		}
 	}
-	if quorum := cfg.Replicas/2 + 1; quorum > len(active) {
+	if quorum := replicas/2 + 1; quorum > len(active) {
 		// Not enough active to satisfy the request.
 		return nil
 	}
 
 	// If we want less then our parent stream, select from active.
-	if cfg.Replicas > 0 && cfg.Replicas < len(peers) {
+	if replicas > 0 && replicas < len(peers) {
 		// Pedantic in case stream is say R5 and consumer is R3 and 3 or more offline, etc.
-		if len(active) < cfg.Replicas {
+		if len(active) < replicas {
 			return nil
 		}
 		// First shuffle the active peers and then select to account for replica = 1.
 		rand.Shuffle(len(active), func(i, j int) { active[i], active[j] = active[j], active[i] })
-		peers = active[:cfg.Replicas]
+		peers = active[:replicas]
 	}
 	storage := sa.Config.Storage
 	if cfg.MemoryStorage {
@@ -7461,12 +7510,6 @@ func (s *Server) jsClusteredConsumerRequest(ci *ClientInfo, acc *Account, subjec
 
 		// We need to set the ephemeral here before replicating.
 		if !isDurableConsumer(cfg) {
-			// We chose to have ephemerals be R=1 unless stream is interest or workqueue.
-			// Consumer can override.
-			if sa.Config.Retention == LimitsPolicy && cfg.Replicas <= 1 {
-				rg.Peers = []string{rg.Preferred}
-				rg.Name = groupNameForConsumer(rg.Peers, rg.Storage)
-			}
 			if cfg.Name != _EMPTY_ {
 				oname = cfg.Name
 			} else {
@@ -8169,8 +8212,15 @@ func (mset *stream) processClusteredInboundMsg(subject, reply string, hdr, msg [
 		// If we are using the system account for NRG, add in the extra sent msgs and bytes to our account
 		// so that the end user / account owner has visibility.
 		if node.IsSystemAccount() && mset.acc != nil && r > 1 {
-			atomic.AddInt64(&mset.acc.outMsgs, int64(r-1))
-			atomic.AddInt64(&mset.acc.outBytes, int64(len(esm)*(r-1)))
+			outMsgs := int64(r - 1)
+			outBytes := int64(len(esm) * (r - 1))
+
+			mset.acc.stats.Lock()
+			mset.acc.stats.outMsgs += outMsgs
+			mset.acc.stats.outBytes += outBytes
+			mset.acc.stats.rt.outMsgs += outMsgs
+			mset.acc.stats.rt.outBytes += outBytes
+			mset.acc.stats.Unlock()
 		}
 	}
 
@@ -8575,7 +8625,28 @@ RETRY:
 				// Check for eof signaling.
 				if len(msg) == 0 {
 					msgsQ.recycle(&mrecs)
-					return nil
+
+					// Sanity check that we've received all data expected by the snapshot.
+					mset.mu.RLock()
+					lseq := mset.lseq
+					mset.mu.RUnlock()
+					if lseq >= snap.LastSeq {
+						return nil
+					}
+
+					// Make sure we do not spin and make things worse.
+					const minRetryWait = 2 * time.Second
+					elapsed := time.Since(reqSendTime)
+					if elapsed < minRetryWait {
+						select {
+						case <-s.quitCh:
+							return ErrServerNotRunning
+						case <-qch:
+							return errCatchupStreamStopped
+						case <-time.After(minRetryWait - elapsed):
+						}
+					}
+					goto RETRY
 				}
 				if _, err := mset.processCatchupMsg(msg); err == nil {
 					if mrec.reply != _EMPTY_ {
@@ -8791,7 +8862,7 @@ func (js *jetStream) clusterInfo(rg *raftGroup) *ClusterInfo {
 	for _, rp := range peers {
 		if rp.ID != id && rg.isMember(rp.ID) {
 			var lastSeen time.Duration
-			if now.After(rp.Last) && rp.Last.Unix() != 0 {
+			if now.After(rp.Last) && !rp.Last.IsZero() {
 				lastSeen = now.Sub(rp.Last)
 			}
 			current := rp.Current
@@ -9079,6 +9150,15 @@ func (mset *stream) runCatchup(sendSubject string, sreq *streamSyncRequest) {
 		// In the latter case the request expects us to have more. Just continue and value availability here.
 		// This should only be possible if the logs have already desynced, and we shouldn't have become leader
 		// in the first place. Not much we can do here in this (hypothetical) scenario.
+
+		// Do another quick sanity check that we actually have enough data to satisfy the request.
+		// If not, let's step down and hope a new leader can correct this.
+		if state.LastSeq < last {
+			s.Warnf("Catchup for stream '%s > %s' skipped, requested sequence %d was larger than current state: %+v",
+				mset.account(), mset.name(), seq, state)
+			node.StepDown()
+			return
+		}
 	}
 
 	mset.setCatchupPeer(sreq.Peer, last-seq)
@@ -9198,7 +9278,7 @@ func (mset *stream) runCatchup(sendSubject string, sreq *streamSyncRequest) {
 						// The snapshot has a larger last sequence then we have. This could be due to a truncation
 						// when trying to recover after corruption, still not 100% sure. Could be off by 1 too somehow,
 						// but tested a ton of those with no success.
-						s.Warnf("Catchup for stream '%s > %s' completed, but requested sequence %d was larger then current state: %+v",
+						s.Warnf("Catchup for stream '%s > %s' completed, but requested sequence %d was larger than current state: %+v",
 							mset.account(), mset.name(), seq, state)
 						// Try our best to redo our invalidated snapshot as well.
 						if n := mset.raftNode(); n != nil {

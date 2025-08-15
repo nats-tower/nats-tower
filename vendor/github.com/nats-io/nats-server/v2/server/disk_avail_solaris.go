@@ -1,4 +1,4 @@
-// Copyright 2022-2025 The NATS Authors
+// Copyright 2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,10 +11,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build wasm
+//go:build illumos || solaris
 
 package server
 
+import (
+	"os"
+	"golang.org/x/sys/unix"
+)
+
 func diskAvailable(storeDir string) int64 {
-	return JetStreamMaxStoreDefault
+	var ba int64
+	if _, err := os.Stat(storeDir); os.IsNotExist(err) {
+		os.MkdirAll(storeDir, defaultDirPerms)
+	}
+	var fs unix.Statvfs_t
+	if err := unix.Statvfs(storeDir, &fs); err == nil {
+		// Estimate 75% of available storage.
+		ba = int64(uint64(fs.Frsize) * uint64(fs.Bavail) / 4 * 3)
+	} else {
+		// Used 1TB default as a guess if all else fails.
+		ba = JetStreamMaxStoreDefault
+	}
+	return ba
 }
+

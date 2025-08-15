@@ -1,4 +1,4 @@
-// Copyright 2023-2024 The NATS Authors
+// Copyright 2023-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -209,7 +209,7 @@ func transformIndexIntArgsHelper(token string, args []string, transformType int1
 	if err != nil {
 		return BadTransform, []int{}, -1, _EMPTY_, &mappingDestinationErr{token, ErrMappingDestinationInvalidArg}
 	}
-	mappingFunctionIntArg, err := strconv.Atoi(strings.Trim(args[1], " "))
+	mappingFunctionIntArg, err := strconv.ParseInt(strings.Trim(args[1], " "), 10, 32)
 	if err != nil {
 		return BadTransform, []int{}, -1, _EMPTY_, &mappingDestinationErr{token, ErrMappingDestinationInvalidArg}
 	}
