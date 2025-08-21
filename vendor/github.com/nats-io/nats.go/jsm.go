@@ -553,6 +553,10 @@ func (js *js) upsertConsumer(stream, consumerName string, cfg *ConsumerConfig, o
 		return nil, info.Error
 	}
 
+	if info.Error == nil && info.ConsumerInfo == nil {
+		return nil, ErrConsumerCreationResponseEmpty
+	}
+
 	// check whether multiple filter subjects (if used) are reflected in the returned ConsumerInfo
 	if len(cfg.FilterSubjects) != 0 && len(info.Config.FilterSubjects) == 0 {
 		return nil, ErrConsumerMultipleFilterSubjectsNotSupported
@@ -1778,6 +1782,11 @@ func getJSContextOpts(defs *jsOpts, opts ...JSOpt) (*jsOpts, context.CancelFunc,
 	if o.pre == _EMPTY_ {
 		o.pre = defs.pre
 	}
-
+	if o.ctx != nil {
+		// if context does not have a deadline, use timeout from js context
+		if _, hasDeadline := o.ctx.Deadline(); !hasDeadline {
+			o.ctx, cancel = context.WithTimeout(o.ctx, defs.wait)
+		}
+	}
 	return &o, cancel, nil
 }
