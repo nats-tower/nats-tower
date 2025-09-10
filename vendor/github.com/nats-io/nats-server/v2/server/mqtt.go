@@ -1,4 +1,4 @@
-// Copyright 2020-2024 The NATS Authors
+// Copyright 2020-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -1100,7 +1100,7 @@ func mqttParsePubRelNATSHeader(headerBytes []byte) uint16 {
 	if len(pubrelValue) == 0 {
 		return 0
 	}
-	pi, _ := strconv.Atoi(string(pubrelValue))
+	pi, _ := strconv.ParseUint(string(pubrelValue), 10, 16)
 	return uint16(pi)
 }
 

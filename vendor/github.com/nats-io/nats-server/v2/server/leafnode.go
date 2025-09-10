@@ -1446,6 +1446,11 @@ func (c *client) processLeafnodeInfo(info *Info) {
 	if finishConnect {
 		s.leafNodeFinishConnectProcess(c)
 	}
+
+	// Check to see if we need to kick any internal source or mirror consumers.
+	// This will be a no-op if JetStream not enabled for this server or if the bound account
+	// does not have jetstream.
+	s.checkInternalSyncConsumers(c.acc)
 }
 
 func (s *Server) negotiateLeafCompression(c *client, didSolicit bool, infoCompression string, co *CompressionOpts) (bool, error) {
@@ -1954,11 +1959,12 @@ func (c *client) processLeafNodeConnect(s *Server, arg []byte, lang string) erro
 	// If we received pub deny permissions from the other end, merge with existing ones.
 	c.mergeDenyPermissions(pub, proto.DenyPub)
 
+	acc := c.acc
 	c.mu.Unlock()
 
 	// Register the cluster, even if empty, as long as we are acting as a hub.
 	if !proto.Hub {
-		c.acc.registerLeafNodeCluster(proto.Cluster)
+		acc.registerLeafNodeCluster(proto.Cluster)
 	}
 
 	// Add in the leafnode here since we passed through auth at this point.
@@ -1973,10 +1979,57 @@ func (c *client) processLeafNodeConnect(s *Server, arg []byte, lang string) erro
 	s.initLeafNodeSmapAndSendSubs(c)
 
 	// Announce the account connect event for a leaf node.
-	// This will no-op as needed.
+	// This will be a no-op as needed.
 	s.sendLeafNodeConnect(c.acc)
 
+	// Check to see if we need to kick any internal source or mirror consumers.
+	// This will be a no-op if JetStream not enabled for this server or if the bound account
+	// does not have jetstream.
+	s.checkInternalSyncConsumers(acc)
+
 	return nil
+}
+
+// checkInternalSyncConsumers
+func (s *Server) checkInternalSyncConsumers(acc *Account) {
+	// Grab our js
+	js := s.getJetStream()
+
+	// Only applicable if we have JS and the leafnode has JS as well.
+	// We check for remote JS outside.
+	if !js.isEnabled() || acc == nil {
+		return
+	}
+
+	// We will check all streams in our local account. They must be a leader and
+	// be sourcing or mirroring. We will check the external config on the stream itself
+	// if this is cross domain, or if the remote domain is empty, meaning we might be
+	// extedning the system across this leafnode connection and hence we would be extending
+	// our own domain.
+	jsa := js.lookupAccount(acc)
+	if jsa == nil {
+		return
+	}
+
+	var streams []*stream
+	jsa.mu.RLock()
+	for _, mset := range jsa.streams {
+		mset.cfgMu.RLock()
+		// We need to have a mirror or source defined.
+		// We do not want to force another lock here to look for leader status,
+		// so collect and after we release jsa will make sure.
+		if mset.cfg.Mirror != nil || len(mset.cfg.Sources) > 0 {
+			streams = append(streams, mset)
+		}
+		mset.cfgMu.RUnlock()
+	}
+	jsa.mu.RUnlock()
+
+	// Now loop through all candidates and check if we are the leader and have NOT
+	// created the sync up consumer.
+	for _, mset := range streams {
+		mset.retryDisconnectedSyncConsumers()
+	}
 }
 
 // Returns the remote cluster name. This is set only once so does not require a lock.
@@ -2174,9 +2227,11 @@ func (s *Server) updateInterestForAccountOnGateway(accName string, sub *subscrip
 	acc.updateLeafNodes(sub, delta)
 }
 
-// updateLeafNodes will make sure to update the account smap for the subscription.
+// updateLeafNodesEx will make sure to update the account smap for the subscription.
 // Will also forward to all leaf nodes as needed.
-func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
+// If `hubOnly` is true, then will update only leaf nodes that connect to this server
+// (that is, for which this server acts as a hub to them).
+func (acc *Account) updateLeafNodesEx(sub *subscription, delta int32, hubOnly bool) {
 	if acc == nil || sub == nil {
 		return
 	}
@@ -2224,8 +2279,14 @@ func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
 		if ln == sub.client {
 			continue
 		}
-		// Check to make sure this sub does not have an origin cluster that matches the leafnode.
 		ln.mu.Lock()
+		// If `hubOnly` is true, it means that we want to update only leafnodes
+		// that connect to this server (so isHubLeafNode() would return `true`).
+		if hubOnly && !ln.isHubLeafNode() {
+			ln.mu.Unlock()
+			continue
+		}
+		// Check to make sure this sub does not have an origin cluster that matches the leafnode.
 		// If skipped, make sure that we still let go the "$LDS." subscription that allows
 		// the detection of loops as long as different cluster.
 		clusterDifferent := cluster != ln.remoteCluster()
@@ -2234,6 +2295,12 @@ func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
 		}
 		ln.mu.Unlock()
 	}
+}
+
+// updateLeafNodes will make sure to update the account smap for the subscription.
+// Will also forward to all leaf nodes as needed.
+func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
+	acc.updateLeafNodesEx(sub, delta, false)
 }
 
 // This will make an update to our internal smap and determine if we should send out

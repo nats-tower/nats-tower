@@ -152,6 +152,7 @@ const (
 	compressionNegotiated                         // Marks if this connection has negotiated compression level with remote.
 	didTLSFirst                                   // Marks if this connection requested and was accepted doing the TLS handshake first (prior to INFO).
 	isSlowConsumer                                // Marks connection as a slow consumer.
+	firstPong                                     // Marks if this is the first PONG received
 )
 
 // set the flag (would be equivalent to set the boolean to true)
@@ -704,7 +705,7 @@ func (c *client) initClient() {
 		if addr := c.nc.RemoteAddr(); addr != nil {
 			if conn = addr.String(); conn != _EMPTY_ {
 				host, port, _ := net.SplitHostPort(conn)
-				iPort, _ := strconv.Atoi(port)
+				iPort, _ := strconv.ParseUint(port, 10, 16)
 				c.host, c.port = host, uint16(iPort)
 				if c.isWebsocket() && c.ws.clientIP != _EMPTY_ {
 					cip := c.ws.clientIP
@@ -1446,14 +1447,25 @@ func (c *client) readLoop(pre []byte) {
 		// Updates stats for client and server that were collected
 		// from parsing through the buffer.
 		if c.in.msgs > 0 {
-			atomic.AddInt64(&c.inMsgs, int64(c.in.msgs))
-			atomic.AddInt64(&c.inBytes, int64(c.in.bytes))
+			inMsgs := int64(c.in.msgs)
+			inBytes := int64(c.in.bytes)
+
+			atomic.AddInt64(&c.inMsgs, inMsgs)
+			atomic.AddInt64(&c.inBytes, inBytes)
+
 			if acc != nil {
-				atomic.AddInt64(&acc.inMsgs, int64(c.in.msgs))
-				atomic.AddInt64(&acc.inBytes, int64(c.in.bytes))
+				acc.stats.Lock()
+				acc.stats.inMsgs += inMsgs
+				acc.stats.inBytes += inBytes
+				if c.kind == LEAF {
+					acc.stats.ln.inMsgs += int64(inMsgs)
+					acc.stats.ln.inBytes += int64(inBytes)
+				}
+				acc.stats.Unlock()
 			}
-			atomic.AddInt64(&s.inMsgs, int64(c.in.msgs))
-			atomic.AddInt64(&s.inBytes, int64(c.in.bytes))
+
+			atomic.AddInt64(&s.inMsgs, inMsgs)
+			atomic.AddInt64(&s.inBytes, inBytes)
 		}
 
 		// Signal to writeLoop to flush to socket.
@@ -1806,7 +1818,9 @@ func (c *client) handleWriteTimeout(written, attempted int64, numChunks int) boo
 		c.srv.scStats.leafs.Add(1)
 	}
 	if c.acc != nil {
-		atomic.AddInt64(&c.acc.slowConsumers, 1)
+		c.acc.stats.Lock()
+		c.acc.stats.slowConsumers++
+		c.acc.stats.Unlock()
 	}
 	c.Noticef("Slow Consumer %s: WriteDeadline of %v exceeded with %d chunks of %d total bytes.",
 		scState, c.out.wdl, numChunks, attempted)
@@ -2356,7 +2370,9 @@ func (c *client) queueOutbound(data []byte) {
 		atomic.AddInt64(&c.srv.slowConsumers, 1)
 		c.srv.scStats.clients.Add(1)
 		if c.acc != nil {
-			atomic.AddInt64(&c.acc.slowConsumers, 1)
+			c.acc.stats.Lock()
+			c.acc.stats.slowConsumers++
+			c.acc.stats.Unlock()
 		}
 		c.Noticef("Slow Consumer Detected: MaxPending of %d Exceeded", c.out.mp)
 		c.markConnAsClosed(SlowConsumerPendingBytes)
@@ -2548,6 +2564,14 @@ func (c *client) processPong() {
 	c.rtt = computeRTT(c.rttStart)
 	srv := c.srv
 	reorderGWs := c.kind == GATEWAY && c.gw.outbound
+	firstPong := c.flags.setIfNotSet(firstPong)
+	var ri *routeInfo
+	// When receiving the first PONG, for a route with pooling, we may be
+	// instructed to start a new route.
+	if firstPong && c.kind == ROUTER && c.route != nil {
+		ri = c.route.startNewRoute
+		c.route.startNewRoute = nil
+	}
 	// If compression is currently active for a route/leaf connection, if the
 	// compression configuration is s2_auto, check if we should change
 	// the compression level.
@@ -2565,6 +2589,11 @@ func (c *client) processPong() {
 	c.mu.Unlock()
 	if reorderGWs {
 		srv.gateway.orderOutboundConnections()
+	}
+	if ri != nil {
+		srv.startGoRoutine(func() {
+			srv.connectToRoute(ri.url, ri.rtype, true, ri.gossipMode, _EMPTY_)
+		})
 	}
 }
 
@@ -3069,6 +3098,13 @@ func (c *client) addShadowSub(sub *subscription, ime *ime, enact bool) (*subscri
 	// Update our route map here. But only if we are not a leaf node or a hub leafnode.
 	if c.kind != LEAF || c.isHubLeafNode() {
 		c.srv.updateRemoteSubscription(im.acc, &nsub, 1)
+	} else if c.kind == LEAF {
+		// Update all leafnodes that connect to this server. Note that we could have
+		// used the updateLeafNodes() function since when it does invoke updateSmap()
+		// this function already takes care of not sending to a spoke leafnode since
+		// the `nsub` here is already from a spoke leafnode, but to be explicit, we
+		// use this version that updates only leafnodes that connect to this server.
+		im.acc.updateLeafNodesEx(&nsub, 1, true)
 	}
 
 	return &nsub, nil
@@ -3177,14 +3213,12 @@ func (c *client) unsubscribe(acc *Account, sub *subscription, force, remove bool
 
 	// Check to see if we have shadow subscriptions.
 	var updateRoute bool
-	var updateGWs bool
+	var isSpokeLeaf bool
 	shadowSubs := sub.shadow
 	sub.shadow = nil
 	if len(shadowSubs) > 0 {
-		updateRoute = (c.kind == CLIENT || c.kind == SYSTEM || c.kind == LEAF) && c.srv != nil
-		if updateRoute {
-			updateGWs = c.srv.gateway.enabled
-		}
+		isSpokeLeaf = c.isSpokeLeafNode()
+		updateRoute = !isSpokeLeaf && (c.kind == CLIENT || c.kind == SYSTEM || c.kind == LEAF) && c.srv != nil
 	}
 	sub.close()
 	c.mu.Unlock()
@@ -3193,16 +3227,12 @@ func (c *client) unsubscribe(acc *Account, sub *subscription, force, remove bool
 	for _, nsub := range shadowSubs {
 		if err := nsub.im.acc.sl.Remove(nsub); err != nil {
 			c.Debugf("Could not remove shadow import subscription for account %q", nsub.im.acc.Name)
-		} else {
-			if updateRoute {
-				c.srv.updateRouteSubscriptionMap(nsub.im.acc, nsub, -1)
-			}
-			if updateGWs {
-				c.srv.gatewayUpdateSubInterest(nsub.im.acc.Name, nsub, -1)
-			}
 		}
-		// Now check on leafnode updates.
-		nsub.im.acc.updateLeafNodes(nsub, -1)
+		if updateRoute {
+			c.srv.updateRemoteSubscription(nsub.im.acc, nsub, -1)
+		} else if isSpokeLeaf {
+			nsub.im.acc.updateLeafNodesEx(nsub, -1, true)
+		}
 	}
 
 	// Now check to see if this was part of a respMap entry for service imports.
@@ -3494,10 +3524,18 @@ func (c *client) deliverMsg(prodIsMQTT bool, sub *subscription, acc *Account, su
 
 	// Check if we are a leafnode and have perms to check.
 	if client.kind == LEAF && client.perms != nil {
-		if !client.pubAllowedFullCheck(string(subject), true, true) {
+		var subjectToCheck []byte
+		if subject[0] == '_' && bytes.HasPrefix(subject, []byte(gwReplyPrefix)) {
+			subjectToCheck = subject[gwSubjectOffset:]
+		} else if subject[0] == '$' && bytes.HasPrefix(subject, []byte(oldGWReplyPrefix)) {
+			subjectToCheck = subject[oldGWReplyStart:]
+		} else {
+			subjectToCheck = subject
+		}
+		if !client.pubAllowedFullCheck(string(subjectToCheck), true, true) {
 			mt.addEgressEvent(client, sub, errMsgTracePubViolation)
 			client.mu.Unlock()
-			client.Debugf("Not permitted to deliver to %q", subject)
+			client.Debugf("Not permitted to deliver to %q", subjectToCheck)
 			return false
 		}
 	}
@@ -4337,7 +4375,7 @@ func sliceHeader(key string, hdr []byte) []byte {
 	if len(hdr) == 0 {
 		return nil
 	}
-	index := bytes.Index(hdr, stringToBytes(key))
+	index := bytes.Index(hdr, stringToBytes(key+":"))
 	hdrLen := len(hdr)
 	// Check that we have enough characters, this will handle the -1 case of the key not
 	// being found and will also handle not having enough characters for trailing CRLF.
@@ -4727,6 +4765,8 @@ func (c *client) processMsgResults(acc *Account, r *SublistResult, msg, deliver,
 	// by having an extra size
 	var dlvMsgs int64
 	var dlvExtraSize int64
+	var dlvRouteMsgs int64
+	var dlvLeafMsgs int64
 
 	// We need to know if this is a MQTT producer because they send messages
 	// without CR_LF (we otherwise remove the size of CR_LF from message size).
@@ -4736,15 +4776,33 @@ func (c *client) processMsgResults(acc *Account, r *SublistResult, msg, deliver,
 		if dlvMsgs == 0 {
 			return
 		}
+
 		totalBytes := dlvMsgs*int64(len(msg)) + dlvExtraSize
+		routeBytes := dlvRouteMsgs*int64(len(msg)) + dlvExtraSize
+		leafBytes := dlvLeafMsgs*int64(len(msg)) + dlvExtraSize
+
 		// For non MQTT producers, remove the CR_LF * number of messages
 		if !prodIsMQTT {
 			totalBytes -= dlvMsgs * int64(LEN_CR_LF)
+			routeBytes -= dlvRouteMsgs * int64(LEN_CR_LF)
+			leafBytes -= dlvLeafMsgs * int64(LEN_CR_LF)
 		}
+
 		if acc != nil {
-			atomic.AddInt64(&acc.outMsgs, dlvMsgs)
-			atomic.AddInt64(&acc.outBytes, totalBytes)
+			acc.stats.Lock()
+			acc.stats.outMsgs += dlvMsgs
+			acc.stats.outBytes += totalBytes
+			if dlvRouteMsgs > 0 {
+				acc.stats.rt.outMsgs += dlvRouteMsgs
+				acc.stats.rt.outBytes += routeBytes
+			}
+			if dlvLeafMsgs > 0 {
+				acc.stats.ln.outMsgs += dlvLeafMsgs
+				acc.stats.ln.outBytes += leafBytes
+			}
+			acc.stats.Unlock()
 		}
+
 		if srv := c.srv; srv != nil {
 			atomic.AddInt64(&srv.outMsgs, dlvMsgs)
 			atomic.AddInt64(&srv.outBytes, totalBytes)
@@ -5065,6 +5123,12 @@ func (c *client) processMsgResults(acc *Account, r *SublistResult, msg, deliver,
 				// Update only if not skipped.
 				if !skipDelivery && sub.icb == nil {
 					dlvMsgs++
+					switch sub.client.kind {
+					case ROUTER:
+						dlvRouteMsgs++
+					case LEAF:
+						dlvLeafMsgs++
+					}
 				}
 				// Do the rest even when message delivery was skipped.
 				didDeliver = true
@@ -5155,6 +5219,12 @@ sendToRoutesOrLeafs:
 		if c.deliverMsg(prodIsMQTT, rt.sub, acc, subject, reply, mh, dmsg, false) {
 			if rt.sub.icb == nil {
 				dlvMsgs++
+				switch dc.kind {
+				case ROUTER:
+					dlvRouteMsgs++
+				case LEAF:
+					dlvLeafMsgs++
+				}
 				dlvExtraSize += int64(len(dmsg) - len(msg))
 			}
 			didDeliver = true
