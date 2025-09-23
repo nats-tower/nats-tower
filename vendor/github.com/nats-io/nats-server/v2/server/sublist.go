@@ -1292,7 +1292,8 @@ func ValidateMapping(src string, dest string) error {
 				!splitFromRightMappingFunctionRegEx.MatchString(t) &&
 				!sliceFromLeftMappingFunctionRegEx.MatchString(t) &&
 				!sliceFromRightMappingFunctionRegEx.MatchString(t) &&
-				!splitMappingFunctionRegEx.MatchString(t) {
+				!splitMappingFunctionRegEx.MatchString(t) &&
+				!randomMappingFunctionRegEx.MatchString(t) {
 				return &mappingDestinationErr{t, ErrUnknownMappingDestinationFunction}
 			} else {
 				continue
@@ -1431,6 +1432,12 @@ func tokenizeSubjectIntoSlice(tts []string, subject string) []string {
 	}
 	tts = append(tts, subject[start:])
 	return tts
+}
+
+// SubjectMatchesFilter returns true if the subject matches the provided
+// filter or false otherwise.
+func SubjectMatchesFilter(subject, filter string) bool {
+	return subjectIsSubsetMatch(subject, filter)
 }
 
 // Calls into the function isSubsetMatch()
