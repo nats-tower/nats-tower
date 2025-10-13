@@ -7,7 +7,7 @@ interface ServerStats {
 	cores: number;
 	mem: number;
 	connections: number;
-	jetstream: {
+	jetstream?: {
 		stats: {
 			storage: number;
 		};
@@ -60,6 +60,9 @@ function calculateTotalConnections(serverInfos: ServerInfo[]): number {
 function calculateTotalUsedJetstreamStorage(serverInfos: ServerInfo[]): number {
 	let total = 0;
 	for (const server of serverInfos) {
+        if (!server.statsz.jetstream) {
+            continue;
+        }
 		total += server.statsz.jetstream.stats.storage;
 	}
 	return total;
@@ -68,6 +71,9 @@ function calculateTotalUsedJetstreamStorage(serverInfos: ServerInfo[]): number {
 function calculateTotalJetstreamStorage(serverInfos: ServerInfo[]): number {
 	let total = 0;
 	for (const server of serverInfos) {
+        if (!server.statsz.jetstream) {
+            continue;
+        }
 		total += Number(server.statsz.jetstream.config.max_storage);
 	}
 	return total;
@@ -219,7 +225,7 @@ export function ClusterInfo({ installationId }: ClusterInfoProps) {
 												Jetstream Storage
 											</div>
 											<div className="font-medium">
-												{`${toStringSigBytesPerKB(server.statsz.jetstream.stats.storage, 2, 1024)} / ${toStringSigBytesPerKB(server.statsz.jetstream.config.max_storage, 2, 1024)}`}
+												{ server.statsz.jetstream ? `${toStringSigBytesPerKB(server.statsz.jetstream.stats.storage, 2, 1024)} / ${toStringSigBytesPerKB(server.statsz.jetstream.config.max_storage, 2, 1024)}` : "N/A" }
 											</div>
 										</div>
 									</div>
