@@ -170,10 +170,10 @@ func generateAccountRecord(_ context.Context,
 	return record, nil
 }
 
-func generateUserRecord(_ context.Context,
+func generateUserRecord(ctx context.Context,
 	record *core.Record,
 	accountID, accountPubKey, accountSigningSeed string, name string) (*core.Record, error) {
-	return generateUserRecordWithPermissions(nil, record, accountID, accountPubKey, accountSigningSeed, name, nil)
+	return generateUserRecordWithPermissions(ctx, record, accountID, accountPubKey, accountSigningSeed, name, nil)
 }
 
 func generateUserRecordWithPermissions(_ context.Context,

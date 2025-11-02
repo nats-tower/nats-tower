@@ -295,7 +295,7 @@ function RoleDialog({
 							id="publish"
 							value={publishPerms}
 							onChange={(e) => setPublishPerms(e.target.value)}
-							placeholder="Enter publish subjects (one per line)&#10;Example:&#10;sensors.>&#10;data.events"
+							placeholder="Enter publish subjects (one per line)\nExample:\nsensors.>\ndata.events"
 							rows={4}
 						/>
 						<div className="text-xs text-gray-500">
@@ -310,7 +310,7 @@ function RoleDialog({
 							id="subscribe"
 							value={subscribePerms}
 							onChange={(e) => setSubscribePerms(e.target.value)}
-							placeholder="Enter subscribe subjects (one per line)&#10;Example:&#10;commands.>&#10;config.updates"
+							placeholder="Enter subscribe subjects (one per line)\nExample:\ncommands.>\nconfig.updates"
 							rows={4}
 						/>
 						<div className="text-xs text-gray-500">

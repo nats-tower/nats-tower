@@ -42,6 +42,7 @@ function Users() {
 	const { installationId, accountId } = Route.useParams();
 	const navigate = useNavigate();
 	const [dialogCreateUserOpen, setDialogCreateUserOpen] = useState(false);
+	const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
 	const {
 		data: installationData,
@@ -181,8 +182,6 @@ function Users() {
 											form.querySelector<HTMLInputElement>(
 												"#description",
 											)?.value;
-										const roleId =
-											form.querySelector<HTMLInputElement>("#role-select")?.value;
 										if (!name || !description) {
 											return;
 										}
@@ -192,10 +191,11 @@ function Users() {
 												name,
 												description,
 												account: accountId,
-												signing_key: roleId || undefined,
+												signing_key: selectedRoleId || undefined,
 											});
 
 										mutateUsers();
+										setSelectedRoleId("");
 										setDialogCreateUserOpen(false);
 									}}
 								>
@@ -233,7 +233,7 @@ function Users() {
 									<div className="flex items-center space-x-2 mt-2">
 										<div className="grid flex-1 gap-2">
 											<Label htmlFor="role-select">Role (Optional)</Label>
-											<Select name="role-select">
+											<Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
 												<SelectTrigger id="role-select">
 													<SelectValue placeholder="No role (full permissions)" />
 												</SelectTrigger>
