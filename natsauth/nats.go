@@ -3,6 +3,7 @@ package natsauth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -192,6 +193,20 @@ func CreateNATSAuthModule(ctx context.Context,
 		}
 
 		accountClaims.Limits = *limits
+
+		// Preserve default permissions from the database
+		defaultPermissionsJSON := record.GetString("default_permissions")
+		if defaultPermissionsJSON != "" {
+			var defaultPermissions jwt.Permissions
+			err = json.Unmarshal([]byte(defaultPermissionsJSON), &defaultPermissions)
+			if err != nil {
+				logger.ErrorContext(ctx, "Could not unmarshal default permissions",
+					slog.String("account_id", record.Id),
+					slog.String("error", err.Error()))
+				return err
+			}
+			accountClaims.DefaultPermissions = defaultPermissions
+		}
 
 		jwtValue, err := accountClaims.Encode(operatorKP)
 		if err != nil {
