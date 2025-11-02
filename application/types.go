@@ -18,17 +18,18 @@ type OperatorAuth struct {
 }
 
 type AccountAuth struct {
-	ID                string
-	Name              string
-	Description       string
-	URL               string
-	PublicKey         string
-	PrivateKey        string
-	Seed              string
-	SigningPublicKey  string
-	SigningPrivateKey string
-	SigningSeed       string
-	JWT               string
+	ID                 string
+	Name               string
+	Description        string
+	URL                string
+	PublicKey          string
+	PrivateKey         string
+	Seed               string
+	SigningPublicKey   string
+	SigningPrivateKey  string
+	SigningSeed        string
+	JWT                string
+	DefaultPermissions string
 }
 
 type UserAuth struct {

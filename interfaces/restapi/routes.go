@@ -201,5 +201,21 @@ func RegisterAPIRoutes(ctx context.Context,
 			}).BindFunc(metricsMiddleware.WrapHandler("/api/nats-tower/installations/:installation_id/accounts/:account_id/imports/:import_name"))
 	}
 
+	{ // DEFAULT PERMISSIONS
+		accountGroup.GET("/default_permissions",
+			func(e *core.RequestEvent) error {
+				installationID := e.Request.PathValue("installation_id")
+				accountID := e.Request.PathValue("account_id")
+				return GetAccountDefaultPermissions(e, installationID, accountID)
+			}).BindFunc(metricsMiddleware.WrapHandler("/api/nats-tower/installations/:installation_id/accounts/:account_id/default_permissions"))
+
+		accountGroup.POST("/default_permissions",
+			func(e *core.RequestEvent) error {
+				installationID := e.Request.PathValue("installation_id")
+				accountID := e.Request.PathValue("account_id")
+				return UpdateAccountDefaultPermissions(e, installationID, accountID)
+			}).BindFunc(metricsMiddleware.WrapHandler("/api/nats-tower/installations/:installation_id/accounts/:account_id/default_permissions"))
+	}
+
 	return nil
 }

@@ -3,6 +3,7 @@ package natsauth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
 
@@ -15,17 +16,18 @@ import (
 
 func GetAccountFromRecord(record *core.Record, url string) (*application.AccountAuth, error) {
 	return &application.AccountAuth{
-		ID:                record.Id,
-		URL:               url,
-		Description:       record.GetString("description"),
-		PublicKey:         record.GetString("public_key"),
-		PrivateKey:        record.GetString("private_key"),
-		Seed:              record.GetString("seed"),
-		SigningPublicKey:  record.GetString("sign_public_key"),
-		SigningPrivateKey: record.GetString("sign_private_key"),
-		SigningSeed:       record.GetString("sign_seed"),
-		JWT:               record.GetString("jwt"),
-		Name:              record.GetString("name"),
+		ID:                 record.Id,
+		URL:                url,
+		Description:        record.GetString("description"),
+		PublicKey:          record.GetString("public_key"),
+		PrivateKey:         record.GetString("private_key"),
+		Seed:               record.GetString("seed"),
+		SigningPublicKey:   record.GetString("sign_public_key"),
+		SigningPrivateKey:  record.GetString("sign_private_key"),
+		SigningSeed:        record.GetString("sign_seed"),
+		JWT:                record.GetString("jwt"),
+		Name:               record.GetString("name"),
+		DefaultPermissions: record.GetString("default_permissions"),
 	}, nil
 }
 
@@ -772,3 +774,133 @@ func (m *NATSAuthModule) ListAccountImports(ctx context.Context,
 
 	return imports, nil
 }
+
+func (m *NATSAuthModule) UpdateAccountDefaultPermissions(ctx context.Context,
+	accountID string,
+	defaultPermissions *jwt.Permissions) error {
+	err := m.cfg.App.RunInTransaction(func(txDao core.App) error {
+		accRecord, err := txDao.FindRecordById("nats_auth_accounts", accountID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				m.logger.ErrorContext(ctx, "Could not find account",
+					slog.String("account_id", accountID),
+					slog.String("error", err.Error()))
+				return ErrNotFound
+			}
+			return err
+		}
+
+		accountClaims, err := jwt.DecodeAccountClaims(accRecord.GetString("jwt"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not decode account claims",
+				slog.String("account_id", accountID),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		// Update default permissions
+		if defaultPermissions != nil {
+			accountClaims.DefaultPermissions = *defaultPermissions
+		} else {
+			accountClaims.DefaultPermissions = jwt.Permissions{}
+		}
+
+		// Validate the permissions
+		results := jwt.CreateValidationResults()
+		accountClaims.DefaultPermissions.Validate(results)
+		if len(results.Issues) > 0 {
+			for _, issue := range results.Issues {
+				if issue.Blocking {
+					m.logger.ErrorContext(ctx, "Default permissions are not valid",
+						slog.String("account_id", accountID),
+						slog.String("error", issue.Description))
+					return errors.New(issue.Description)
+				}
+			}
+		}
+
+		// Find operator to sign these updates
+		operatorRecord, err := txDao.FindRecordById("nats_auth_operators", accRecord.GetString("operator"))
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not find operator for account",
+				slog.String("account_id", accountID),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("sign_seed")))
+		if err != nil {
+			return err
+		}
+
+		jwtValue, err := accountClaims.Encode(operatorKP)
+		if err != nil {
+			return err
+		}
+
+		// Store the permissions as JSON in the database
+		var permissionsJSON string
+		if defaultPermissions != nil {
+			permBytes, err := json.Marshal(defaultPermissions)
+			if err != nil {
+				m.logger.ErrorContext(ctx, "Could not marshal permissions to JSON",
+					slog.String("account_id", accountID),
+					slog.String("error", err.Error()))
+				return err
+			}
+			permissionsJSON = string(permBytes)
+		}
+
+		accRecord.Set("jwt", jwtValue)
+		accRecord.Set("default_permissions", permissionsJSON)
+
+		err = txDao.Save(accRecord)
+		if err != nil {
+			m.logger.ErrorContext(ctx, "Could not save account",
+				slog.String("account_id", accountID),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		m.logger.InfoContext(ctx, "Default permissions updated successfully",
+			slog.String("account_id", accountID))
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *NATSAuthModule) GetAccountDefaultPermissions(ctx context.Context,
+	accountID string) (*jwt.Permissions, error) {
+
+	accRecord, err := m.cfg.App.FindRecordById("nats_auth_accounts", accountID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			m.logger.ErrorContext(ctx, "Could not find account",
+				slog.String("account_id", accountID),
+				slog.String("error", err.Error()))
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	permissionsJSON := accRecord.GetString("default_permissions")
+	if permissionsJSON == "" {
+		return &jwt.Permissions{}, nil
+	}
+
+	var permissions jwt.Permissions
+	err = json.Unmarshal([]byte(permissionsJSON), &permissions)
+	if err != nil {
+		m.logger.ErrorContext(ctx, "Could not unmarshal permissions from JSON",
+			slog.String("account_id", accountID),
+			slog.String("error", err.Error()))
+		return nil, err
+	}
+
+	return &permissions, nil
+}
+

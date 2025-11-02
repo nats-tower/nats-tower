@@ -300,3 +300,46 @@ func DeleteAccountImport(e *core.RequestEvent, installationID, accountID, import
 
 	return e.JSON(http.StatusOK, map[string]any{})
 }
+
+type defaultPermissionsResponse struct {
+	Permissions *jwt.Permissions `json:"permissions"`
+}
+
+func GetAccountDefaultPermissions(e *core.RequestEvent, installationID, accountID string) error {
+	if installationID == "" || accountID == "" {
+		return e.Error(http.StatusBadRequest, "installation_id and account_id are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
+
+	permissions, err := natsauthModule.GetAccountDefaultPermissions(e.Request.Context(), accountID)
+
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to get account default permissions", err)
+	}
+
+	return e.JSON(http.StatusOK, &defaultPermissionsResponse{
+		Permissions: permissions,
+	})
+}
+
+func UpdateAccountDefaultPermissions(e *core.RequestEvent, installationID, accountID string) error {
+	if installationID == "" || accountID == "" {
+		return e.Error(http.StatusBadRequest, "installation_id and account_id are required", nil)
+	}
+	natsauthModule := utils.MustGetNATSAuth(e)
+
+	req := jwt.Permissions{}
+	err := e.BindBody(&req)
+	if err != nil {
+		return e.Error(http.StatusBadRequest, "Invalid request body", err)
+	}
+
+	err = natsauthModule.UpdateAccountDefaultPermissions(e.Request.Context(), accountID, &req)
+
+	if err != nil {
+		return e.Error(http.StatusInternalServerError, "Failed to update account default permissions", err)
+	}
+
+	return e.JSON(http.StatusOK, map[string]any{})
+}
+

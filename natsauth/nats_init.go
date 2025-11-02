@@ -263,6 +263,10 @@ func initNATSAuthAccountsCollection(ctx context.Context,
 		Name:     "sign_seed",
 		Required: false,
 	})
+	addOrUpdateField(collection, &core.JSONField{
+		Name:     "default_permissions",
+		Required: false,
+	})
 	addOrUpdateField(collection, &core.RelationField{
 		Name:         "limits",
 		CollectionId: limitCollection.Id,
