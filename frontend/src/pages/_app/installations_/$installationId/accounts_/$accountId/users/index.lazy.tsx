@@ -1,10 +1,11 @@
 import { pb } from "@/lib/pocketbase";
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import useSWR from "swr";
 import type {
 	NatsAuthAccountsRecord,
 	NatsAuthOperatorsRecord,
 	NatsAuthUsersRecord,
+	NatsAuthSigningKeysRecord,
 } from "@/lib/pocketbase-types";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -20,9 +21,16 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { PlusIcon, Save } from "lucide-react";
+import { PlusIcon, Save, Settings } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { getUsersColumns } from "@/components/ui/users/user-columns";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createLazyFileRoute(
 	"/_app/installations_/$installationId/accounts_/$accountId/users/",
@@ -32,6 +40,7 @@ export const Route = createLazyFileRoute(
 
 function Users() {
 	const { installationId, accountId } = Route.useParams();
+	const navigate = useNavigate();
 	const [dialogCreateUserOpen, setDialogCreateUserOpen] = useState(false);
 
 	const {
@@ -89,13 +98,35 @@ function Users() {
 
 			return pb.collection<NatsAuthUsersRecord>("nats_auth_users").getFullList({
 				filter: `account = "${accountId}"`,
+				expand: "signing_key",
 			});
 		},
 	);
 
-	if (installationError || accountError || usersError)
+	const {
+		data: rolesData,
+		error: rolesError,
+		isLoading: rolesLoading,
+	} = useSWR(
+		[
+			`/installations/${installationId}/accounts/${accountId}/roles`,
+			installationId,
+			accountId,
+		],
+		async ([_, installationId, accountId]) => {
+			if (!installationId || !accountId) {
+				return;
+			}
+
+			return pb.collection<NatsAuthSigningKeysRecord>("nats_auth_signing_keys").getFullList({
+				filter: `account = "${accountId}"`,
+			});
+		},
+	);
+
+	if (installationError || accountError || usersError || rolesError)
 		return <div>failed to load</div>;
-	if (installationLoading || accountLoading || usersLoading)
+	if (installationLoading || accountLoading || usersLoading || rolesLoading)
 		return <div>loading...</div>;
 	if (!installationData || !accountData || !usersData) {
 		return <div>no data</div>;
@@ -104,7 +135,7 @@ function Users() {
 	return (
 		<div className="p-4">
 			<div className="container mx-auto">
-				<div className="mb-6 flex flex-row">
+				<div className="mb-6 flex flex-row justify-between items-start">
 					<div className="flex items-center">
 						<div className="flex-1">
 							<h2 className="text-2xl font-bold">Users</h2>
@@ -115,6 +146,13 @@ function Users() {
 						</div>
 					</div>
 				</div>
+				<Button
+					variant="outline"
+					onClick={() => navigate({ to: `/installations/${installationId}/accounts/${accountId}/roles` })}
+				>
+					<Settings className="h-4 w-4 mr-2" />
+					Manage Roles
+				</Button>
 			</div>
 			<div className="container mx-auto bg-white rounded-lg shadow p-4">
 				<DataTable
@@ -143,6 +181,8 @@ function Users() {
 											form.querySelector<HTMLInputElement>(
 												"#description",
 											)?.value;
+										const roleId =
+											form.querySelector<HTMLInputElement>("#role-select")?.value;
 										if (!name || !description) {
 											return;
 										}
@@ -152,6 +192,7 @@ function Users() {
 												name,
 												description,
 												account: accountId,
+												signing_key: roleId || undefined,
 											});
 
 										mutateUsers();
@@ -187,6 +228,29 @@ function Users() {
 												placeholder="Enter user description"
 												required
 											/>
+										</div>
+									</div>
+									<div className="flex items-center space-x-2 mt-2">
+										<div className="grid flex-1 gap-2">
+											<Label htmlFor="role-select">Role (Optional)</Label>
+											<Select name="role-select">
+												<SelectTrigger id="role-select">
+													<SelectValue placeholder="No role (full permissions)" />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="">No role (full permissions)</SelectItem>
+													{rolesData?.map((role) => (
+														<SelectItem key={role.id} value={role.id}>
+															{role.role}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+											{rolesData && rolesData.length > 0 && (
+												<div className="text-xs text-gray-500">
+													Select a role to apply scoped publish/subscribe permissions. Leave empty for full access.
+												</div>
+											)}
 										</div>
 									</div>
 									<DialogFooter className="justify-end mt-2">

@@ -51,6 +51,15 @@ export function getUsersColumns(
 			header: "Description",
 		},
 		{
+			id: "role",
+			header: "Role",
+			cell: ({ row }) => {
+				const user = row.original;
+				const signingKey = (user as any).expand?.signing_key;
+				return signingKey ? <div>{signingKey.role}</div> : <div className="text-gray-400">-</div>;
+			},
+		},
+		{
 			id: "actions",
 			header: () => <div className="text-right">Actions</div>,
 			cell: ({ row }) => {
