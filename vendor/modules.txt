@@ -97,7 +97,7 @@ github.com/nats-io/jsm.go/api/server/advisory
 github.com/nats-io/jsm.go/api/server/metric
 github.com/nats-io/jsm.go/natscontext
 github.com/nats-io/jsm.go/schemas
-# github.com/nats-io/jwt/v2 v2.7.4
+# github.com/nats-io/jwt/v2 v2.8.0
 ## explicit; go 1.23.0
 github.com/nats-io/jwt/v2
 # github.com/nats-io/nats-server/v2 v2.11.4
