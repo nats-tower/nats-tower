@@ -1,4 +1,4 @@
-# github.com/antithesishq/antithesis-sdk-go v0.5.0-default-no-op
+# github.com/antithesishq/antithesis-sdk-go v0.5.0
 ## explicit; go 1.20
 github.com/antithesishq/antithesis-sdk-go/assert
 github.com/antithesishq/antithesis-sdk-go/internal
@@ -91,8 +91,8 @@ github.com/minio/highwayhash
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/nats-io/jsm.go v0.2.3
-## explicit; go 1.23.6
+# github.com/nats-io/jsm.go v0.3.0
+## explicit; go 1.24.0
 github.com/nats-io/jsm.go
 github.com/nats-io/jsm.go/api
 github.com/nats-io/jsm.go/api/event
@@ -100,6 +100,7 @@ github.com/nats-io/jsm.go/api/jetstream/advisory
 github.com/nats-io/jsm.go/api/jetstream/metric
 github.com/nats-io/jsm.go/api/server/advisory
 github.com/nats-io/jsm.go/api/server/metric
+github.com/nats-io/jsm.go/api/server/zmonitor
 github.com/nats-io/jsm.go/natscontext
 github.com/nats-io/jsm.go/schemas
 # github.com/nats-io/jwt/v2 v2.8.0
@@ -178,8 +179,8 @@ github.com/pocketbase/pocketbase/tools/subscriptions
 github.com/pocketbase/pocketbase/tools/tokenizer
 github.com/pocketbase/pocketbase/tools/types
 github.com/pocketbase/pocketbase/ui
-# github.com/prometheus/client_golang v1.22.0
-## explicit; go 1.22
+# github.com/prometheus/client_golang v1.23.2
+## explicit; go 1.23.0
 github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil
 github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil/header
 github.com/prometheus/client_golang/prometheus
@@ -191,11 +192,11 @@ github.com/prometheus/client_golang/prometheus/promhttp/internal
 # github.com/prometheus/client_model v0.6.2
 ## explicit; go 1.22.0
 github.com/prometheus/client_model/go
-# github.com/prometheus/common v0.63.0
-## explicit; go 1.21
+# github.com/prometheus/common v0.66.1
+## explicit; go 1.23.0
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/model
-# github.com/prometheus/procfs v0.16.1
+# github.com/prometheus/procfs v0.17.0
 ## explicit; go 1.23.0
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
@@ -212,6 +213,9 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.6
 ## explicit; go 1.12
 github.com/spf13/pflag
+# go.yaml.in/yaml/v2 v2.4.3
+## explicit; go 1.15
+go.yaml.in/yaml/v2
 # golang.org/x/crypto v0.46.0
 ## explicit; go 1.24.0
 golang.org/x/crypto/acme
@@ -230,8 +234,8 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/ocsp
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6
-## explicit; go 1.23.0
+# golang.org/x/exp v0.0.0-20250911091902-df9299821621
+## explicit; go 1.24.0
 golang.org/x/exp/constraints
 # golang.org/x/image v0.27.0
 ## explicit; go 1.23.0
@@ -292,8 +296,8 @@ golang.org/x/text/unicode/norm
 # golang.org/x/time v0.14.0
 ## explicit; go 1.24.0
 golang.org/x/time/rate
-# google.golang.org/protobuf v1.36.6
-## explicit; go 1.22
+# google.golang.org/protobuf v1.36.9
+## explicit; go 1.23
 google.golang.org/protobuf/encoding/protodelim
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
