@@ -477,6 +477,41 @@ func AllowDirect() StreamOption {
 	}
 }
 
+func AllowAtomicBatchPublish() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowAtomicPublish = true
+		return nil
+	}
+}
+
+func NoAllowAtomicBatchPublish() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowAtomicPublish = false
+		return nil
+	}
+}
+
+func AllowCounter() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowMsgCounter = true
+		return nil
+	}
+}
+
+func NoAllowCounter() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowMsgCounter = false
+		return nil
+	}
+}
+
+func AllowSchedules() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowMsgSchedules = true
+		return nil
+	}
+}
+
 func NoAllowDirect() StreamOption {
 	return func(o *api.StreamConfig) error {
 		o.AllowDirect = false
@@ -554,6 +589,13 @@ func SubjectTransform(subjectTransform *api.SubjectTransformConfig) StreamOption
 	}
 }
 
+func AsyncPersistence() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.PersistMode = api.AsyncPersistMode
+		return nil
+	}
+}
+
 // PageContents creates a StreamPager used to traverse the contents of the stream,
 // Close() should be called to dispose of the background consumer and resources
 func (s *Stream) PageContents(opts ...PagerOption) (*StreamPager, error) {
@@ -577,7 +619,7 @@ func (s *Stream) UpdateConfiguration(cfg api.StreamConfig, opts ...StreamOption)
 		return err
 	}
 
-	req := api.JSApiStreamCreateRequest{
+	req := api.JSApiStreamUpdateRequest{
 		Pedantic:     s.mgr.pedantic,
 		StreamConfig: *ncfg,
 	}
@@ -627,17 +669,17 @@ func (s *Stream) ConsumerNames() (names []string, err error) {
 }
 
 // EachConsumer calls cb with each known consumer for this stream, error on any error to load consumers
-func (s *Stream) EachConsumer(cb func(consumer *Consumer)) (missing []string, err error) {
-	consumers, missing, err := s.mgr.Consumers(s.Name())
+func (s *Stream) EachConsumer(cb func(consumer *Consumer)) (missing []string, offline map[string]string, err error) {
+	consumers, missing, offline, err := s.mgr.Consumers(s.Name())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, c := range consumers {
 		cb(c)
 	}
 
-	return missing, nil
+	return missing, offline, nil
 }
 
 // LatestInformation returns the most recently fetched stream information
@@ -842,7 +884,7 @@ func (s *Stream) LeaderStepDown(placement ...*api.Placement) error {
 	}
 
 	var resp api.JSApiStreamLeaderStepDownResponse
-	err := s.mgr.jsonRequest(fmt.Sprintf(api.JSApiStreamLeaderStepDownT, s.Name()), api.JSApiStreamLeaderStepdownRequest{Placement: p}, &resp)
+	err := s.mgr.jsonRequest(fmt.Sprintf(api.JSApiStreamLeaderStepDownT, s.Name()), api.JSApiStreamLeaderStepDownRequest{Placement: p}, &resp)
 	if err != nil {
 		return err
 	}
@@ -859,11 +901,8 @@ func (s *Stream) DirectGet(ctx context.Context, req api.JSApiMsgGetRequest, hand
 	if !s.DirectAllowed() {
 		return 0, 0, 0, fmt.Errorf("direct gets are not enabled for %s", s.Name())
 	}
-	if req.Batch == 0 {
+	if req.Batch == 0 && req.LastFor != "" {
 		return 0, 0, 0, fmt.Errorf("batch size is required")
-	}
-	if req.Seq == 0 {
-		req.Seq = 1
 	}
 
 	rj, err := json.Marshal(req)
@@ -1132,6 +1171,9 @@ func (s *Stream) DeleteAllowed() bool                      { return !s.cfg.DenyD
 func (s *Stream) PurgeAllowed() bool                       { return !s.cfg.DenyPurge }
 func (s *Stream) RollupAllowed() bool                      { return s.cfg.RollupAllowed }
 func (s *Stream) DirectAllowed() bool                      { return s.cfg.AllowDirect }
+func (s *Stream) AtomicBatchPublishAllowed() bool          { return s.cfg.AllowAtomicPublish }
+func (s *Stream) CounterAllowed() bool                     { return s.cfg.AllowMsgCounter }
+func (s *Stream) SchedulesAllowed() bool                   { return s.cfg.AllowMsgSchedules }
 func (s *Stream) MirrorDirectAllowed() bool                { return s.cfg.MirrorDirect }
 func (s *Stream) Republish() *api.RePublish                { return s.cfg.RePublish }
 func (s *Stream) IsRepublishing() bool                     { return s.Republish() != nil }
@@ -1141,3 +1183,4 @@ func (s *Stream) FirstSequence() uint64                    { return s.cfg.FirstS
 func (s *Stream) AllowMsgTTL() bool                        { return s.cfg.AllowMsgTTL }
 func (s *Stream) SubjectDeleteMarkerTTL() time.Duration    { return s.cfg.SubjectDeleteMarkerTTL }
 func (s *Stream) ConsumerLimits() api.StreamConsumerLimits { return s.cfg.ConsumerLimits }
+func (s *Stream) PersistenceMode() api.PersistModeType     { return s.cfg.PersistMode }
