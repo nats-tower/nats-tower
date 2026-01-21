@@ -79,7 +79,14 @@
   * {
     @apply border-border;
   }
+  html,
+  body {
+    @apply h-full;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  #root {
+    @apply h-full;
   }
 }
