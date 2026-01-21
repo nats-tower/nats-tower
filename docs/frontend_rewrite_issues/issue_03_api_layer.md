@@ -164,7 +164,6 @@ src/
 export const installationsQueries = {
   all: () => ['installations'] as const,
   lists: () => [...installationsQueries.all(), 'list'] as const,
-  list: () => [...installationsQueries.lists()] as const,
   details: () => [...installationsQueries.all(), 'detail'] as const,
   detail: (id: string) => [...installationsQueries.details(), id] as const,
   withTeams: (id: string) => [...installationsQueries.detail(id), 'teams'] as const,
@@ -173,7 +172,7 @@ export const installationsQueries = {
 // src/features/installations/api/use-installations.ts
 export function useInstallations() {
   return useQuery({
-    queryKey: installationsQueries.list(),
+    queryKey: installationsQueries.lists(),
     queryFn: async () => {
       return pb.collection('nats_auth_operators').getFullList();
     },
