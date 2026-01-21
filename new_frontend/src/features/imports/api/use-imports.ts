@@ -22,13 +22,7 @@ export function useAccountImports(installationId: string, accountId: string) {
         }
       );
 
-      return res.imports.map((importItem) => ({
-        name: importItem.name,
-        subject: importItem.subject,
-        local_subject: importItem.local_subject,
-        type: importItem.type,
-        account: importItem.account,
-      }));
+      return res.imports;
     },
     enabled: !!accountId && !!installationId,
   });

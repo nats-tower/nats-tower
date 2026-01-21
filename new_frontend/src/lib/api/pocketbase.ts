@@ -52,18 +52,12 @@ pb.afterSend = (response: Response, data: any) => {
 };
 
 // Auto-refresh authentication
+// Note: PocketBase SDK automatically handles token refresh when making requests
+// with an expired token, so no manual refresh scheduling is needed here.
+// This onChange handler can be used for other authentication state changes if needed.
 pb.authStore.onChange(() => {
-  if (pb.authStore.isValid) {
-    // Schedule token refresh before it expires
-    const token = pb.authStore.token;
-    if (token) {
-      // Refresh 5 minutes before expiry
-      const timeUntilRefresh = pb.authStore.exportToCookie().length * 1000 - 5 * 60 * 1000;
-      setTimeout(() => {
-        if (pb.authStore.isValid) {
-          pb.collection("users").authRefresh();
-        }
-      }, timeUntilRefresh);
-    }
+  if (!pb.authStore.isValid) {
+    // Handle logout or invalid auth state
+    console.log("Authentication state changed: user logged out");
   }
 });

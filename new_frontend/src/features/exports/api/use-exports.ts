@@ -22,11 +22,7 @@ export function useAccountExports(installationId: string, accountId: string) {
         }
       );
 
-      return res.exports.map((exportItem) => ({
-        name: exportItem.name,
-        subject: exportItem.subject,
-        type: exportItem.type,
-      }));
+      return res.exports;
     },
     enabled: !!accountId && !!installationId,
   });

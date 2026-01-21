@@ -26,7 +26,7 @@ export interface AccountExport {
 
 export interface AccountImport {
     name: string;
-    account: string
+    account: string;
     subject: string;
     type: "service" | "stream";
     local_subject: string;
