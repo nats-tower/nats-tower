@@ -15,7 +15,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { pb } from "@/lib/pocketbase";
+import { pb } from "@/lib/api/pocketbase";
 import { EnterIcon } from "@radix-ui/react-icons";
 import {
   Tooltip,
@@ -32,18 +32,19 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { getBuildInfo } from "@/services/buildinfo";
+import { useBuildInfo } from "@/features/buildinfo/api/use-buildinfo";
+import { useAuth } from "@/features/auth/lib/auth-context";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
   const [dialogBuildInfoOpen, setDialogBuildInfoOpen] = useState(false);
-  const user = pb.authStore.record;
+  const { user, logout } = useAuth();
 
   const {
     data: buildInfoData,
     error: buildInfoError,
     isLoading: buildInfoLoading,
-  } = getBuildInfo();
+  } = useBuildInfo();
 
   if (buildInfoError) return <div>failed to load</div>;
   if (buildInfoLoading) {
@@ -74,18 +75,23 @@ export function NavUser() {
     );
   }
 
-  const isAdmin = pb.authStore.isSuperuser;
+  const isAdmin = user.collectionName === "_superusers";
   const initials = (user.name || user.email || "U")[0].toUpperCase();
   const primaryName = user.name || user.email;
   const secondaryName = user.name ? user.email : null;
 
   let avatarUrl: string | undefined = undefined;
 
-  if (isAdmin && user.avatar && Number.isFinite(user.avatar)) {
+  // Type assertion or check if avatar exists on user object
+  // UsersResponse has avatar field
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userWithAvatar = user as any; 
+
+  if (isAdmin && userWithAvatar.avatar && Number.isFinite(userWithAvatar.avatar)) {
     // This is to handle the default admin user avatar that is stored as a number
-    avatarUrl = `${pb.baseURL}_/images/avatars/avatar${user.avatar}.svg`;
-  } else if (user.avatar) {
-    avatarUrl = pb.files.getURL(user, user.avatar);
+    avatarUrl = `${pb.baseURL}_/images/avatars/avatar${userWithAvatar.avatar}.svg`;
+  } else if (userWithAvatar.avatar) {
+    avatarUrl = pb.files.getURL(user, userWithAvatar.avatar);
   }
 
   return (
@@ -127,8 +133,7 @@ export function NavUser() {
             <DropdownMenuItem
               className="cursor-pointer hover:bg-gray-100"
               onClick={() => {
-                pb.authStore.clear();
-                location.reload();
+                logout();
               }}
             >
               <LogOut />
@@ -151,7 +156,8 @@ export function NavUser() {
                 <strong>Settings:</strong>
               </p>
               <ul className="list-disc pl-5 text-sm text-gray-700">
-                {buildInfoData.settings.map((setting) => {
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {buildInfoData.settings.map((setting: any) => {
                   return (
                     <li key={setting.key} className="flex items-center">
                       <strong className="mr-1">{setting.key}:</strong>{" "}

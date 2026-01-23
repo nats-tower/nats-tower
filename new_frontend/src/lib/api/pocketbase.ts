@@ -20,6 +20,7 @@ interface FieldError {
 
 // Error handling interceptor
 // biome-ignore lint/suspicious/noExplicitAny: generic error catch
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 pb.afterSend = (response: Response, data: any) => {
   if (response.status !== 200 && response.status !== 204) {
     let errorMessage = `An error occurred: ${response.status}`;
