@@ -19,7 +19,7 @@ export function useSession() {
         // This will throw an error if the token has expired
         await pb.collection("users").authRefresh();
         return pb.authStore.record;
-      } catch (error) {
+      } catch {
         // Token is invalid or expired
         pb.authStore.clear();
         return null;

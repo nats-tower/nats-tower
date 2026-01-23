@@ -1,4 +1,4 @@
-import { redirect } from "@tanstack/react-router";
+import { redirect, useRouter } from "@tanstack/react-router";
 import { pb } from "@/lib/api/pocketbase";
 
 /**
@@ -9,9 +9,6 @@ export function requireAuth() {
   if (!pb.authStore.isValid) {
     throw redirect({
       to: "/signin",
-      search: {
-        redirect: window.location.pathname,
-      },
     });
   }
 }

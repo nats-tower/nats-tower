@@ -43,7 +43,7 @@ export function SignInForm() {
     setError(null);
     try {
       await login(data.email, data.password, data.rememberMe);
-    } catch (err) {
+    } catch {
       setError("Invalid email or password. Please try again.");
     }
   };
