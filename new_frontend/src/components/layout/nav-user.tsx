@@ -15,7 +15,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { pb } from "@/lib/pocketbase";
+import { pb } from "@/lib/api/pocketbase";
 import { EnterIcon } from "@radix-ui/react-icons";
 import {
   Tooltip,
@@ -33,9 +33,11 @@ import {
 } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { getBuildInfo } from "@/services/buildinfo";
+import { useAuth } from "@/features/auth/lib/auth-context";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
+  const { logout } = useAuth();
   const [dialogBuildInfoOpen, setDialogBuildInfoOpen] = useState(false);
   const user = pb.authStore.record;
 
@@ -127,8 +129,7 @@ export function NavUser() {
             <DropdownMenuItem
               className="cursor-pointer hover:bg-gray-100"
               onClick={() => {
-                pb.authStore.clear();
-                location.reload();
+                logout();
               }}
             >
               <LogOut />

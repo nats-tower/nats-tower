@@ -1,5 +1,6 @@
 // Re-export query factories for easier imports
 
+export * from "./auth";
 export * from "./installations";
 export * from "./accounts";
 export * from "./users";

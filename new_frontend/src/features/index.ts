@@ -1,5 +1,11 @@
 // Re-export all feature hooks for easier imports
 
+// Authentication
+export * from "@/features/auth/api/use-login";
+export * from "@/features/auth/api/use-logout";
+export * from "@/features/auth/api/use-session";
+export * from "@/features/auth/lib/auth-context";
+
 // Installations
 export * from "@/features/installations/api/use-installations";
 
