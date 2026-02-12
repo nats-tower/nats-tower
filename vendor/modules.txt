@@ -140,7 +140,7 @@ github.com/nats-io/nuid
 # github.com/ncruces/go-strftime v0.1.9
 ## explicit; go 1.17
 github.com/ncruces/go-strftime
-# github.com/pocketbase/dbx v1.11.0
+# github.com/pocketbase/dbx v1.12.0
 ## explicit; go 1.13
 github.com/pocketbase/dbx
 # github.com/pocketbase/pocketbase v0.28.1
