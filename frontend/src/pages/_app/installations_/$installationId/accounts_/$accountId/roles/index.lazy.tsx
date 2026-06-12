@@ -27,13 +27,13 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createLazyFileRoute(
-	"/_app/installations_/$installationId/accounts_/$accountId/roles/" as any,
+	"/_app/installations_/$installationId/accounts_/$accountId/roles/",
 )({
 	component: Roles,
 });
 
 function Roles() {
-	const params = Route.useParams() as { installationId: string; accountId: string };
+	const params = Route.useParams();
 	const { installationId, accountId } = params;
 	const [dialogCreateRoleOpen, setDialogCreateRoleOpen] = useState(false);
 	const [editingRole, setEditingRole] = useState<NatsAuthSigningKeysRecord | null>(null);

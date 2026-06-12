@@ -6,7 +6,12 @@ import type {
 	NatsAuthOperatorsRecord,
 	NatsAuthUsersRecord,
 	NatsAuthSigningKeysRecord,
+	NatsAuthUsersResponse,
 } from "@/lib/pocketbase-types";
+
+const NO_ROLE_VALUE = "__none__";
+
+type UserWithRole = NatsAuthUsersResponse<{ signing_key: NatsAuthSigningKeysRecord }>;
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import {
@@ -42,7 +47,7 @@ function Users() {
 	const { installationId, accountId } = Route.useParams();
 	const navigate = useNavigate();
 	const [dialogCreateUserOpen, setDialogCreateUserOpen] = useState(false);
-	const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+	const [selectedRoleId, setSelectedRoleId] = useState<string>(NO_ROLE_VALUE);
 
 	const {
 		data: installationData,
@@ -133,6 +138,8 @@ function Users() {
 		return <div>no data</div>;
 	}
 
+	const selectedRole = rolesData?.find((role) => role.id === selectedRoleId);
+
 	return (
 		<div className="p-4">
 			<div className="container mx-auto">
@@ -146,19 +153,19 @@ function Users() {
 							</div>
 						</div>
 					</div>
+					<Button
+						variant="outline"
+						onClick={() => navigate({ to: `/installations/${installationId}/accounts/${accountId}/roles` })}
+					>
+						<Settings className="h-4 w-4 mr-2" />
+						Manage Roles
+					</Button>
 				</div>
-				<Button
-					variant="outline"
-					onClick={() => navigate({ to: `/installations/${installationId}/accounts/${accountId}/roles` })}
-				>
-					<Settings className="h-4 w-4 mr-2" />
-					Manage Roles
-				</Button>
 			</div>
 			<div className="container mx-auto bg-white rounded-lg shadow p-4">
 				<DataTable
 					columns={getUsersColumns(accountData, installationData, mutateUsers)}
-					data={usersData || []}
+					data={(usersData || []) as UserWithRole[]}
 					noRowsText="No users found"
 					addButton={
 						<Dialog
@@ -191,11 +198,11 @@ function Users() {
 												name,
 												description,
 												account: accountId,
-												signing_key: selectedRoleId || undefined,
+												signing_key: selectedRoleId === NO_ROLE_VALUE ? undefined : selectedRoleId,
 											});
 
 										mutateUsers();
-										setSelectedRoleId("");
+										setSelectedRoleId(NO_ROLE_VALUE);
 										setDialogCreateUserOpen(false);
 									}}
 								>
@@ -238,7 +245,7 @@ function Users() {
 													<SelectValue placeholder="No role (full permissions)" />
 												</SelectTrigger>
 												<SelectContent>
-													<SelectItem value="">No role (full permissions)</SelectItem>
+													<SelectItem value={NO_ROLE_VALUE}>No role (full permissions)</SelectItem>
 													{rolesData?.map((role) => (
 														<SelectItem key={role.id} value={role.id}>
 															{role.role}
@@ -246,7 +253,22 @@ function Users() {
 													))}
 												</SelectContent>
 											</Select>
-											{rolesData && rolesData.length > 0 && (
+											{selectedRole ? (
+												<div className="rounded-md border bg-muted/40 p-3 text-xs text-gray-600 space-y-1">
+													<div>
+														<span className="font-medium">Publish:</span>{" "}
+														{selectedRole.publish?.length
+															? selectedRole.publish.join(", ")
+															: "none"}
+													</div>
+													<div>
+														<span className="font-medium">Subscribe:</span>{" "}
+														{selectedRole.subscribe?.length
+															? selectedRole.subscribe.join(", ")
+															: "none"}
+													</div>
+												</div>
+											) : (
 												<div className="text-xs text-gray-500">
 													Select a role to apply scoped publish/subscribe permissions. Leave empty for full access.
 												</div>

@@ -173,12 +173,12 @@ func generateAccountRecord(_ context.Context,
 func generateUserRecord(ctx context.Context,
 	record *core.Record,
 	accountID, accountPubKey, accountSigningSeed string, name string) (*core.Record, error) {
-	return generateUserRecordWithPermissions(ctx, record, accountID, accountPubKey, accountSigningSeed, name, nil)
+	return generateUserRecordWithPermissions(ctx, record, accountID, accountPubKey, accountSigningSeed, name, nil, false)
 }
 
 func generateUserRecordWithPermissions(_ context.Context,
 	record *core.Record,
-	accountID, accountPubKey, accountSigningSeed string, name string, permissions *jwt.Permissions) (*core.Record, error) {
+	accountID, accountPubKey, accountSigningSeed string, name string, permissions *jwt.Permissions, scoped bool) (*core.Record, error) {
 	// create user
 	userKP, err := nkeys.CreateUser()
 	if err != nil {
@@ -202,9 +202,10 @@ func generateUserRecordWithPermissions(_ context.Context,
 	userClaims := jwt.NewUserClaims(pubKey)
 	userClaims.Name = name
 	userClaims.IssuerAccount = accountPubKey
-	
-	// Apply permissions if provided (from signing key)
-	if permissions != nil {
+
+	if scoped {
+		userClaims.SetScoped(true)
+	} else if permissions != nil {
 		userClaims.Permissions = *permissions
 	}
 

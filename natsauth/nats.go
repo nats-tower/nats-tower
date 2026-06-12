@@ -134,36 +134,8 @@ func CreateNATSAuthModule(ctx context.Context,
 				if err != nil {
 					return err
 				}
-				
-				// Update account to include this signing key
-				accountClaims, err := jwt.DecodeAccountClaims(accountRecord.GetString("jwt"))
-				if err != nil {
-					logger.ErrorContext(ctx, "Could not decode account claims",
-						slog.String("error", err.Error()))
-					return err
-				}
-				
-				accountClaims.SigningKeys.Add(record.GetString("public_key"))
-				
-				operatorRecord, err := e.App.FindRecordById("nats_auth_operators", accountRecord.GetString("operator"))
-				if err != nil {
-					return err
-				}
-				
-				operatorKP, err := nkeys.FromSeed([]byte(operatorRecord.GetString("sign_seed")))
-				if err != nil {
-					return err
-				}
-				
-				jwtValue, err := accountClaims.Encode(operatorKP)
-				if err != nil {
-					return err
-				}
-				
-				accountRecord.Set("jwt", jwtValue)
-				if err := e.App.UnsafeWithoutHooks().Save(accountRecord); err != nil {
-					logger.ErrorContext(ctx, "Could not save account with new signing key",
-						slog.String("error", err.Error()))
+
+				if err := t.syncSigningKeyScopeToAccount(ctx, e.App, record); err != nil {
 					return err
 				}
 			}
@@ -180,59 +152,32 @@ func CreateNATSAuthModule(ctx context.Context,
 					return err
 				}
 				
-				// Check if user has a signing key assigned
 				signingKeyID := record.GetString("signing_key")
 				var signingKeySeed string
-				var permissions *jwt.Permissions
-				
+				scoped := false
+
 				if signingKeyID != "" {
 					signingKeyRecord, err := e.App.FindRecordById("nats_auth_signing_keys", signingKeyID)
 					if err != nil {
 						return err
 					}
+					if err := validateSigningKeyAccount(signingKeyRecord, accountRecord); err != nil {
+						return err
+					}
 					signingKeySeed = signingKeyRecord.GetString("seed")
-					
-					// Parse permissions from the signing key
-					permissions = &jwt.Permissions{}
-					pubPerms := signingKeyRecord.Get("publish")
-					subPerms := signingKeyRecord.Get("subscribe")
-					
-					if pubPerms != nil {
-						if pubArray, ok := pubPerms.([]interface{}); ok {
-							pubStrings := make([]string, len(pubArray))
-							for i, v := range pubArray {
-								if s, ok := v.(string); ok {
-									pubStrings[i] = s
-								}
-							}
-							permissions.Pub.Allow = pubStrings
-						}
-					}
-					
-					if subPerms != nil {
-						if subArray, ok := subPerms.([]interface{}); ok {
-							subStrings := make([]string, len(subArray))
-							for i, v := range subArray {
-								if s, ok := v.(string); ok {
-									subStrings[i] = s
-								}
-							}
-							permissions.Sub.Allow = subStrings
-						}
-					}
+					scoped = true
 				} else {
-					// Use account signing seed if no signing key
 					signingKeySeed = accountRecord.GetString("sign_seed")
 				}
-				
-				// Generate user with optional permissions
+
 				_, err = generateUserRecordWithPermissions(ctx,
 					record,
 					accountRecord.Id,
 					accountRecord.GetString("public_key"),
 					signingKeySeed,
 					record.GetString("name"),
-					permissions)
+					nil,
+					scoped)
 				if err != nil {
 					return err
 				}
@@ -459,6 +404,29 @@ func CreateNATSAuthModule(ctx context.Context,
 				return err
 			}
 		}
+		if e.Record.TableName() == "nats_auth_signing_keys" {
+			record := e.Record
+			if record.GetString("public_key") == "" {
+				return e.Next()
+			}
+
+			if err := t.syncSigningKeyScopeToAccount(ctx, e.App, record); err != nil {
+				logger.ErrorContext(ctx, "Could not sync signing key scope to account",
+					slog.String("error", err.Error()))
+				return err
+			}
+
+			accountRecord, err := e.App.FindRecordById("nats_auth_accounts", record.GetString("account"))
+			if err != nil {
+				return err
+			}
+
+			if err := t.publishAccountUpdate(ctx, e.App, accountRecord); err != nil {
+				logger.ErrorContext(ctx, "Could not publish account after signing key update",
+					slog.String("error", err.Error()))
+				return err
+			}
+		}
 		return e.Next()
 	})
 
@@ -487,6 +455,35 @@ func CreateNATSAuthModule(ctx context.Context,
 			t.handlePendingAccountActions(record.Id)
 
 			return nil // return nil to suspend deletion
+		}
+
+		if e.Record.TableName() == "nats_auth_signing_keys" {
+			record := e.Record
+
+			userCount, err := signingKeyUsersCount(e.App, record.Id)
+			if err != nil {
+				return err
+			}
+			if userCount > 0 {
+				return fmt.Errorf("cannot delete role while %d user(s) are assigned to it", userCount)
+			}
+
+			if err := t.removeSigningKeyFromAccount(ctx, e.App, record); err != nil {
+				logger.ErrorContext(ctx, "Could not remove signing key from account",
+					slog.String("error", err.Error()))
+				return err
+			}
+
+			accountRecord, err := e.App.FindRecordById("nats_auth_accounts", record.GetString("account"))
+			if err != nil {
+				return err
+			}
+
+			if err := t.publishAccountUpdate(ctx, e.App, accountRecord); err != nil {
+				logger.ErrorContext(ctx, "Could not publish account after signing key removal",
+					slog.String("error", err.Error()))
+				return err
+			}
 		}
 
 		return e.Next()
@@ -661,6 +658,23 @@ func CreateNATSAuthModule(ctx context.Context,
 
 			t.handlePendingAccountActions(record.Id)
 			return e.Next()
+		}
+		if e.Record.TableName() == "nats_auth_signing_keys" {
+			record := e.Record
+			if record.GetString("public_key") == "" {
+				return e.Next()
+			}
+
+			accountRecord, err := e.App.FindRecordById("nats_auth_accounts", record.GetString("account"))
+			if err != nil {
+				return err
+			}
+
+			if err := t.publishAccountUpdate(ctx, e.App, accountRecord); err != nil {
+				logger.ErrorContext(ctx, "Could not publish account after signing key creation",
+					slog.String("error", err.Error()))
+				return err
+			}
 		}
 		if e.Record.TableName() == "nats_auth_users" && !cfg.DisableNATSCLIContexts { // only create user contexts if not disabled
 			record := e.Record

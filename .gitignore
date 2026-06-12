@@ -32,3 +32,4 @@ go.work.sum
 /jwt
 /jetstream
 natsauth/pb_data
+natsauth/.jwt
