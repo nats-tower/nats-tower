@@ -46,7 +46,8 @@ type snapshotOptions struct {
 	debug         bool
 	consumers     bool
 	jsck          bool
-	chunkSz       int
+	chunkSz       int // optional
+	wndSz         int // optional
 	progress      bool
 	restoreConfig *api.StreamConfig
 }
@@ -107,6 +108,13 @@ func RestoreConfiguration(cfg api.StreamConfig) SnapshotOption {
 func SnapshotChunkSize(sz int) SnapshotOption {
 	return func(o *snapshotOptions) {
 		o.chunkSz = sz
+	}
+}
+
+// SnapshotWindowSize sets the total amount of data in-flight during a stream snapshot
+func SnapshotWindowSize(sz int) SnapshotOption {
+	return func(o *snapshotOptions) {
+		o.wndSz = sz
 	}
 }
 
@@ -288,13 +296,21 @@ func (sp *snapshotProgress) notify() {
 }
 
 // the tracker will uncompress and untar the stream keeping count of bytes received etc
-func (sp *snapshotProgress) trackBlockProgress(r io.Reader, debug bool, errc chan error) {
+func (sp *snapshotProgress) trackBlockProgress(ctx context.Context, r io.Reader, debug bool, errc chan error) {
 	sr := s2.NewReader(r)
 
 	for {
 		b := make([]byte, sp.chunkSize)
 		i, err := sr.Read(b)
 		if err != nil {
+			// Only propagate genuine decompression errors; EOF and pipe-closed
+			// are expected during normal shutdown when the pipe is torn down.
+			if ctx.Err() == nil && err != io.EOF {
+				select {
+				case errc <- err:
+				case <-ctx.Done():
+				}
+			}
 			sp.notify()
 			return
 		}
@@ -353,6 +369,12 @@ func (s *Stream) createSnapshot(ctx context.Context, dataBuffer, metadataBuffer 
 		NoConsumers:    !sopts.consumers,
 		CheckMsgs:      sopts.jsck,
 		ChunkSize:      sopts.chunkSz,
+		WindowSize:     sopts.wndSz,
+	}
+
+	// Currently needed as otherwise the progress tracking below breaks.
+	if req.ChunkSize == 0 {
+		req.ChunkSize = 128 * 1024
 	}
 
 	var resp api.JSApiStreamSnapshotResponse
@@ -378,7 +400,11 @@ func (s *Stream) createSnapshot(ctx context.Context, dataBuffer, metadataBuffer 
 			rcb:           sopts.rcb,
 			healthCheck:   sopts.jsck,
 		}
-		defer func() { progress.endTime = time.Now() }()
+		defer func() {
+			progress.Lock()
+			progress.endTime = time.Now()
+			progress.Unlock()
+		}()
 		go progress.trackBps(sctx)
 
 		// set up a multi writer that writes to file and the progress monitor
@@ -386,7 +412,7 @@ func (s *Stream) createSnapshot(ctx context.Context, dataBuffer, metadataBuffer 
 		trackingR, trackingW := net.Pipe()
 		defer trackingR.Close()
 		defer trackingW.Close()
-		go progress.trackBlockProgress(trackingR, sopts.debug, errc)
+		go progress.trackBlockProgress(sctx, trackingR, sopts.debug, errc)
 
 		writer = io.MultiWriter(dataBuffer, trackingW)
 
@@ -411,6 +437,21 @@ func (s *Stream) createSnapshot(ctx context.Context, dataBuffer, metadataBuffer 
 			return
 		}
 
+		// Respond to flow control immediately. The data is already in memory
+		// and pending limits are unlimited, so it is safe to ack before writing
+		// to disk. This prevents the server's 2s flow control timeout from
+		// firing when disk writes or decompression tracking are slow.
+		// If the subsequent write fails, the backup will still error properly.
+		if m.Reply != "" {
+			if sopts.debug && sopts.progress {
+				progress.Lock()
+				log.Printf("Responded to server subject %s %s chunks, last chunk size %s", m.Reply, humanize.Comma(int64(progress.chunksReceived)), humanize.IBytes(uint64(len(m.Data))))
+				progress.Unlock()
+			}
+
+			m.Respond(nil)
+		}
+
 		if sopts.progress {
 			progress.Lock()
 			progress.bytesReceived += uint64(len(m.Data))
@@ -426,16 +467,6 @@ func (s *Stream) createSnapshot(ctx context.Context, dataBuffer, metadataBuffer 
 		if n != len(m.Data) {
 			errc <- fmt.Errorf("failed to write %d bytes to %s, only wrote %d", len(m.Data), sopts.dataFile, n)
 			return
-		}
-
-		if m.Reply != "" {
-			if sopts.debug && sopts.progress {
-				progress.Lock()
-				log.Printf("Responding to server subject %s %s chunks, last chunk size %s", m.Reply, humanize.Comma(int64(progress.chunksReceived)), humanize.IBytes(uint64(len(m.Data))))
-				progress.Unlock()
-			}
-
-			m.Respond(nil)
 		}
 	})
 	if err != nil {
@@ -461,10 +492,15 @@ func (s *Stream) createSnapshot(ctx context.Context, dataBuffer, metadataBuffer 
 			return nil, err
 		}
 
-		metadataBuffer.Write(mj)
+		_, err = metadataBuffer.Write(mj)
+		if err != nil {
+			return nil, err
+		}
 
 		if sopts.progress {
+			progress.Lock()
 			progress.finished = true
+			progress.Unlock()
 			progress.notify()
 		}
 
@@ -480,7 +516,6 @@ func (s *Stream) SnapshotToDirectory(ctx context.Context, dir string, opts ...Sn
 		metaFile:  filepath.Join(dir, "backup.json"),
 		jsck:      false,
 		consumers: false,
-		chunkSz:   128 * 1024,
 		progress:  true,
 	}
 
@@ -511,7 +546,6 @@ func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffe
 	sopts := &snapshotOptions{
 		jsck:      false,
 		consumers: false,
-		chunkSz:   128 * 1024,
 		progress:  false,
 	}
 
@@ -525,6 +559,10 @@ func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffe
 func (m *Manager) restoreSnapshot(ctx context.Context, stream string, dataReader, metadataReader io.ReadCloser, sopts *snapshotOptions) (RestoreProgress, *api.StreamState, error) {
 	defer dataReader.Close()
 	defer metadataReader.Close()
+
+	if !IsValidName(stream) {
+		return nil, nil, fmt.Errorf("invalid stream name %q", stream)
+	}
 
 	req := api.JSApiStreamRestoreRequest{}
 	mj, err := io.ReadAll(metadataReader)
@@ -572,7 +610,11 @@ func (m *Manager) restoreSnapshot(ctx context.Context, stream string, dataReader
 			rcb:          sopts.rcb,
 			scb:          sopts.scb,
 		}
-		defer func() { progress.endTime = time.Now() }()
+		defer func() {
+			progress.Lock()
+			progress.endTime = time.Now()
+			progress.Unlock()
+		}()
 		go progress.trackBps(ctx)
 
 		// in debug notify ~20ish times
@@ -585,7 +627,7 @@ func (m *Manager) restoreSnapshot(ctx context.Context, stream string, dataReader
 		progress.notify()
 	}
 
-	if sopts.debug {
+	if sopts.debug && sopts.progress {
 		log.Printf("Starting restore of %q from %s using %d chunks", req.Config.Name, sopts.dataFile, progress.chunksToSend)
 	}
 
@@ -615,11 +657,10 @@ func (m *Manager) restoreSnapshot(ctx context.Context, stream string, dataReader
 		}
 
 		if sopts.progress {
+			progress.Lock()
 			if sopts.debug && progress.chunksSent > 0 && progress.chunksSent%notifyInterval == 0 {
 				log.Printf("Sent %d chunks", progress.chunksSent)
 			}
-
-			progress.Lock()
 			progress.chunksSent++
 			progress.bytesSent += uint64(n)
 			progress.Unlock()

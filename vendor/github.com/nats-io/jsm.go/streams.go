@@ -133,6 +133,10 @@ func (m *Manager) LoadFromStreamDetailBytes(sd []byte) (stream *Stream, consumer
 	}
 
 	for _, consumer := range cons.Consumers {
+		if !IsValidName(consumer.Name) {
+			return nil, nil, fmt.Errorf("%q is not a valid consumer name", consumer.Name)
+		}
+
 		c := Consumer{
 			name:     consumer.Name,
 			stream:   stream.Name(),
@@ -163,7 +167,10 @@ func (m *Manager) LoadOrNewStreamFromDefault(name string, dflt api.StreamConfig,
 	}
 
 	for _, o := range opts {
-		o(&dflt)
+		err = o(&dflt)
+		if err != nil {
+			return nil, err
+		}
 	}
 	s, err := m.LoadStream(name)
 	if IsNatsError(err, 10059) {
@@ -477,6 +484,41 @@ func AllowDirect() StreamOption {
 	}
 }
 
+func AllowAtomicBatchPublish() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowAtomicPublish = true
+		return nil
+	}
+}
+
+func NoAllowAtomicBatchPublish() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowAtomicPublish = false
+		return nil
+	}
+}
+
+func AllowCounter() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowMsgCounter = true
+		return nil
+	}
+}
+
+func NoAllowCounter() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowMsgCounter = false
+		return nil
+	}
+}
+
+func AllowSchedules() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.AllowMsgSchedules = true
+		return nil
+	}
+}
+
 func NoAllowDirect() StreamOption {
 	return func(o *api.StreamConfig) error {
 		o.AllowDirect = false
@@ -554,6 +596,13 @@ func SubjectTransform(subjectTransform *api.SubjectTransformConfig) StreamOption
 	}
 }
 
+func AsyncPersistence() StreamOption {
+	return func(o *api.StreamConfig) error {
+		o.PersistMode = api.AsyncPersistMode
+		return nil
+	}
+}
+
 // PageContents creates a StreamPager used to traverse the contents of the stream,
 // Close() should be called to dispose of the background consumer and resources
 func (s *Stream) PageContents(opts ...PagerOption) (*StreamPager, error) {
@@ -577,7 +626,7 @@ func (s *Stream) UpdateConfiguration(cfg api.StreamConfig, opts ...StreamOption)
 		return err
 	}
 
-	req := api.JSApiStreamCreateRequest{
+	req := api.JSApiStreamUpdateRequest{
 		Pedantic:     s.mgr.pedantic,
 		StreamConfig: *ncfg,
 	}
@@ -627,17 +676,17 @@ func (s *Stream) ConsumerNames() (names []string, err error) {
 }
 
 // EachConsumer calls cb with each known consumer for this stream, error on any error to load consumers
-func (s *Stream) EachConsumer(cb func(consumer *Consumer)) (missing []string, err error) {
-	consumers, missing, err := s.mgr.Consumers(s.Name())
+func (s *Stream) EachConsumer(cb func(consumer *Consumer)) (missing []string, offline map[string]string, err error) {
+	consumers, missing, offline, err := s.mgr.Consumers(s.Name())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, c := range consumers {
 		cb(c)
 	}
 
-	return missing, nil
+	return missing, offline, nil
 }
 
 // LatestInformation returns the most recently fetched stream information
@@ -697,6 +746,10 @@ func (s *Stream) ClusterInfo() (api.ClusterInfo, error) {
 		return api.ClusterInfo{}, err
 	}
 
+	if nfo.Cluster == nil {
+		return api.ClusterInfo{}, fmt.Errorf("stream %q has no cluster information", s.Name())
+	}
+
 	return *nfo.Cluster, nil
 }
 
@@ -733,7 +786,22 @@ func (s *Stream) Seal() error {
 	return s.UpdateConfiguration(cfg)
 }
 
-// Purge deletes messages from the Stream, an optional JSApiStreamPurgeRequest can be supplied to limit the purge to a subset of messages
+// PurgeExt deletes messages from the Stream using JSApiStreamPurgeRequest
+func (s *Stream) PurgeExt(req *api.JSApiStreamPurgeRequest) (*api.JSApiStreamPurgeResponse, error) {
+	var resp api.JSApiStreamPurgeResponse
+	err := s.mgr.jsonRequest(fmt.Sprintf(api.JSApiStreamPurgeT, s.Name()), req, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Success {
+		return &resp, fmt.Errorf("unknown failure")
+	}
+
+	return &resp, nil
+}
+
+// Purge deletes messages from the Stream, an optional JSApiStreamPurgeRequest can be supplied to limit the purge to a subset of messages. To gain access to the full Purge response use PurgeExt
 func (s *Stream) Purge(opts ...*api.JSApiStreamPurgeRequest) error {
 	if len(opts) > 1 {
 		return fmt.Errorf("only one purge option allowed")
@@ -744,17 +812,8 @@ func (s *Stream) Purge(opts ...*api.JSApiStreamPurgeRequest) error {
 		req = opts[0]
 	}
 
-	var resp api.JSApiStreamPurgeResponse
-	err := s.mgr.jsonRequest(fmt.Sprintf(api.JSApiStreamPurgeT, s.Name()), req, &resp)
-	if err != nil {
-		return err
-	}
-
-	if !resp.Success {
-		return fmt.Errorf("unknown failure")
-	}
-
-	return nil
+	_, err := s.PurgeExt(req)
+	return err
 }
 
 // ReadLastMessageForSubject reads the last message stored in the stream for a specific subject
@@ -842,7 +901,7 @@ func (s *Stream) LeaderStepDown(placement ...*api.Placement) error {
 	}
 
 	var resp api.JSApiStreamLeaderStepDownResponse
-	err := s.mgr.jsonRequest(fmt.Sprintf(api.JSApiStreamLeaderStepDownT, s.Name()), api.JSApiStreamLeaderStepdownRequest{Placement: p}, &resp)
+	err := s.mgr.jsonRequest(fmt.Sprintf(api.JSApiStreamLeaderStepDownT, s.Name()), api.JSApiStreamLeaderStepDownRequest{Placement: p}, &resp)
 	if err != nil {
 		return err
 	}
@@ -859,11 +918,8 @@ func (s *Stream) DirectGet(ctx context.Context, req api.JSApiMsgGetRequest, hand
 	if !s.DirectAllowed() {
 		return 0, 0, 0, fmt.Errorf("direct gets are not enabled for %s", s.Name())
 	}
-	if req.Batch == 0 {
+	if req.Batch == 0 && req.LastFor != "" {
 		return 0, 0, 0, fmt.Errorf("batch size is required")
-	}
-	if req.Seq == 0 {
-		req.Seq = 1
 	}
 
 	rj, err := json.Marshal(req)
@@ -927,6 +983,12 @@ func (s *Stream) DirectGet(ctx context.Context, req api.JSApiMsgGetRequest, hand
 			return
 		}
 
+		numPending, err = strconv.ParseUint(np, 10, 64)
+		if err != nil {
+			cancel(fmt.Errorf("invalid num pending header: %w", err))
+			return
+		}
+
 		handler(m)
 	})
 	if err != nil {
@@ -939,6 +1001,9 @@ func (s *Stream) DirectGet(ctx context.Context, req api.JSApiMsgGetRequest, hand
 	msg.Reply = sub.Subject
 
 	err = nc.PublishMsg(msg)
+	if err != nil {
+		return 0, 0, 0, err
+	}
 
 	<-to.Done()
 
@@ -970,7 +1035,7 @@ func (s *Stream) DetectGaps(ctx context.Context, progress func(seq uint64, pendi
 		return err
 	}
 
-	progress(nfo.State.Msgs, nfo.State.Msgs)
+	progress(nfo.State.FirstSeq, nfo.State.LastSeq)
 
 	if len(nfo.State.Deleted) == 0 {
 		return nil
@@ -986,7 +1051,7 @@ func (s *Stream) DetectGaps(ctx context.Context, progress func(seq uint64, pendi
 	start := nfo.State.Deleted[0]
 
 	for i, seq := range nfo.State.Deleted {
-		progress(seq, nfo.State.Msgs-seq)
+		progress(seq, nfo.State.LastSeq-seq)
 
 		// the last deleted message
 		if i == len(nfo.State.Deleted)-1 {
@@ -1024,10 +1089,12 @@ func (s *Stream) DetectGaps(ctx context.Context, progress func(seq uint64, pendi
 	}
 	defer sub.Unsubscribe()
 
-	_, err = s.NewConsumer(DeliverHeadersOnly(), PushFlowControl(), DeliverySubject(sub.Subject), InactiveThreshold(time.Minute), IdleHeartbeat(time.Second), AcknowledgeNone(), StartAtSequence(nfo.State.Deleted[len(nfo.State.Deleted)-1]+1))
+	var consumer *Consumer
+	consumer, err = s.NewConsumer(DeliverHeadersOnly(), PushFlowControl(), DeliverySubject(sub.Subject), InactiveThreshold(time.Minute), IdleHeartbeat(time.Second), AcknowledgeNone(), StartAtSequence(nfo.State.Deleted[len(nfo.State.Deleted)-1]+1))
 	if err != nil {
 		return err
 	}
+	defer consumer.Delete()
 
 	last := uint64(math.MaxUint64)
 
@@ -1065,9 +1132,6 @@ func (s *Stream) DetectGaps(ctx context.Context, progress func(seq uint64, pendi
 		}
 	}
 }
-
-// IsTemplateManaged determines if this stream is managed by a template
-func (s *Stream) IsTemplateManaged() bool { return s.Template() != "" }
 
 // IsMirror determines if this stream is a mirror of another
 func (s *Stream) IsMirror() bool { return s.cfg.Mirror != nil }
@@ -1123,7 +1187,6 @@ func (s *Stream) MaxMsgSize() int32                        { return s.cfg.MaxMsg
 func (s *Stream) Storage() api.StorageType                 { return s.cfg.Storage }
 func (s *Stream) Replicas() int                            { return s.cfg.Replicas }
 func (s *Stream) NoAck() bool                              { return s.cfg.NoAck }
-func (s *Stream) Template() string                         { return s.cfg.Template }
 func (s *Stream) DuplicateWindow() time.Duration           { return s.cfg.Duplicates }
 func (s *Stream) Mirror() *api.StreamSource                { return s.cfg.Mirror }
 func (s *Stream) Sources() []*api.StreamSource             { return s.cfg.Sources }
@@ -1132,6 +1195,9 @@ func (s *Stream) DeleteAllowed() bool                      { return !s.cfg.DenyD
 func (s *Stream) PurgeAllowed() bool                       { return !s.cfg.DenyPurge }
 func (s *Stream) RollupAllowed() bool                      { return s.cfg.RollupAllowed }
 func (s *Stream) DirectAllowed() bool                      { return s.cfg.AllowDirect }
+func (s *Stream) AtomicBatchPublishAllowed() bool          { return s.cfg.AllowAtomicPublish }
+func (s *Stream) CounterAllowed() bool                     { return s.cfg.AllowMsgCounter }
+func (s *Stream) SchedulesAllowed() bool                   { return s.cfg.AllowMsgSchedules }
 func (s *Stream) MirrorDirectAllowed() bool                { return s.cfg.MirrorDirect }
 func (s *Stream) Republish() *api.RePublish                { return s.cfg.RePublish }
 func (s *Stream) IsRepublishing() bool                     { return s.Republish() != nil }
@@ -1141,3 +1207,4 @@ func (s *Stream) FirstSequence() uint64                    { return s.cfg.FirstS
 func (s *Stream) AllowMsgTTL() bool                        { return s.cfg.AllowMsgTTL }
 func (s *Stream) SubjectDeleteMarkerTTL() time.Duration    { return s.cfg.SubjectDeleteMarkerTTL }
 func (s *Stream) ConsumerLimits() api.StreamConsumerLimits { return s.cfg.ConsumerLimits }
+func (s *Stream) PersistenceMode() api.PersistModeType     { return s.cfg.PersistMode }
