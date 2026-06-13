@@ -87,6 +87,17 @@ type route struct {
 	// Transient value used to set the Info.GossipMode when initiating
 	// an implicit route and sending to the remote.
 	gossipMode byte
+	// This will be set in case of pooling so that a route can trigger
+	// the creation of the next after receiving a PONG, ensuring
+	// that authentication did not fail.
+	startNewRoute *routeInfo
+}
+
+// This contains the information required to create a new route.
+type routeInfo struct {
+	url        *url.URL
+	rtype      RouteType
+	gossipMode byte
 }
 
 // Do not change the values/order since they are exchanged between servers.
@@ -132,6 +143,7 @@ const (
 // Can be changed for tests
 var (
 	routeConnectDelay    = DEFAULT_ROUTE_CONNECT
+	routeConnectMaxDelay = DEFAULT_ROUTE_CONNECT_MAX
 	routeMaxPingInterval = defaultRouteMaxPingInterval
 )
 
@@ -169,8 +181,7 @@ func (c *client) processAccountUnsub(arg []byte) {
 // we have an origin cluster and we force header semantics.
 func (c *client) processRoutedOriginClusterMsgArgs(arg []byte) error {
 	// Unroll splitArgs to avoid runtime/heap issues
-	a := [MAX_HMSG_ARGS + 1][]byte{}
-	args := a[:0]
+	args := c.argsa[:0]
 	start := -1
 	for i, b := range arg {
 		switch b {
@@ -268,8 +279,7 @@ func (c *client) processRoutedOriginClusterMsgArgs(arg []byte) error {
 // Process an inbound HMSG specification from the remote route.
 func (c *client) processRoutedHeaderMsgArgs(arg []byte) error {
 	// Unroll splitArgs to avoid runtime/heap issues
-	a := [MAX_HMSG_ARGS][]byte{}
-	args := a[:0]
+	args := c.argsa[:0]
 	var an []byte
 	if c.kind == ROUTER {
 		if an = c.route.accName; len(an) > 0 {
@@ -365,8 +375,7 @@ func (c *client) processRoutedHeaderMsgArgs(arg []byte) error {
 // Process an inbound RMSG or LMSG specification from the remote route.
 func (c *client) processRoutedMsgArgs(arg []byte) error {
 	// Unroll splitArgs to avoid runtime/heap issues
-	a := [MAX_RMSG_ARGS][]byte{}
-	args := a[:0]
+	args := c.argsa[:0]
 	var an []byte
 	if c.kind == ROUTER {
 		if an = c.route.accName; len(an) > 0 {
@@ -449,7 +458,8 @@ func (c *client) processInboundRoutedMsg(msg []byte) {
 	// Update statistics
 	c.in.msgs++
 	// The msg includes the CR_LF, so pull back out for accounting.
-	c.in.bytes += int32(len(msg) - LEN_CR_LF)
+	size := len(msg) - LEN_CR_LF
+	c.in.bytes += int32(size)
 
 	if c.opts.Verbose {
 		c.sendOK()
@@ -471,6 +481,13 @@ func (c *client) processInboundRoutedMsg(msg []byte) {
 		c.Debugf("Unknown account %q for routed message on subject: %q", c.pa.account, c.pa.subject)
 		return
 	}
+
+	acc.stats.Lock()
+	acc.stats.inMsgs++
+	acc.stats.inBytes += int64(size)
+	acc.stats.rt.inMsgs++
+	acc.stats.rt.inBytes += int64(size)
+	acc.stats.Unlock()
 
 	// Check for no interest, short circuit if so.
 	// This is the fanout scale.
@@ -1011,7 +1028,7 @@ func (s *Server) sendAsyncInfoToClients(regCli, wsCli bool) {
 			c.flags.isSet(firstPongSent) {
 			// sendInfo takes care of checking if the connection is still
 			// valid or not, so don't duplicate tests here.
-			c.enqueueProto(c.generateClientInfoJSON(info))
+			c.enqueueProto(c.generateClientInfoJSON(info, true))
 		}
 		c.mu.Unlock()
 	}
@@ -1998,7 +2015,7 @@ func (s *Server) createRoute(conn net.Conn, rURL *url.URL, rtype RouteType, goss
 			pingInterval = opts.Cluster.PingInterval
 		}
 		if opts.Cluster.MaxPingsOut > 0 {
-			pingMax = opts.MaxPingsOut
+			pingMax = opts.Cluster.MaxPingsOut
 		}
 		c.watchForStaleConnection(adjustPingInterval(ROUTER, pingInterval), pingMax)
 	} else {
@@ -2035,7 +2052,7 @@ func (s *Server) createRoute(conn net.Conn, rURL *url.URL, rtype RouteType, goss
 	if tlsRequired {
 		c.Debugf("TLS handshake complete")
 		cs := c.nc.(*tls.Conn).ConnectionState()
-		c.Debugf("TLS version %s, cipher suite %s", tlsVersion(cs.Version), tlsCipher(cs.CipherSuite))
+		c.Debugf("TLS version %s, cipher suite %s", tlsVersion(cs.Version), tls.CipherSuiteName(cs.CipherSuite))
 	}
 
 	// Queue Connect proto if we solicited the connection.
@@ -2326,8 +2343,20 @@ func (s *Server) addRoute(c *client, didSolicit, sendDelayedInfo bool, gossipMod
 		if doOnce {
 			// check to be consistent and future proof. but will be same domain
 			if s.sameDomain(info.Domain) {
-				s.nodeToInfo.Store(rHash,
-					nodeInfo{rn, s.info.Version, s.info.Cluster, info.Domain, id, nil, nil, nil, false, info.JetStream, false, false})
+				s.nodeToInfo.Store(rHash, nodeInfo{
+					name:            rn,
+					version:         s.info.Version,
+					cluster:         s.info.Cluster,
+					domain:          info.Domain,
+					id:              id,
+					tags:            nil,
+					cfg:             nil,
+					stats:           nil,
+					offline:         false,
+					js:              info.JetStream,
+					binarySnapshots: true, // Updated default to true. Versions 2.10.0+ support it.
+					accountNRG:      false,
+				})
 			}
 		}
 
@@ -2371,20 +2400,18 @@ func (s *Server) addRoute(c *client, didSolicit, sendDelayedInfo bool, gossipMod
 		// Send the subscriptions interest.
 		s.sendSubsToRoute(c, idx, _EMPTY_)
 
-		// In pool mode, if we did not yet reach the cap, try to connect a new connection
+		// In pool mode, if we did not yet reach the cap, try to connect a new connection,
+		// but do so only after receiving the first PONG to our PING, which will ensure
+		// that we have proper authentication.
 		if pool && didSolicit && sz != effectivePoolSize {
-			s.startGoRoutine(func() {
-				select {
-				case <-time.After(time.Duration(rand.Intn(100)) * time.Millisecond):
-				case <-s.quitCh:
-					// Doing this here and not as a defer because connectToRoute is also
-					// calling s.grWG.Done() on exit, so we do this only if we don't
-					// invoke connectToRoute().
-					s.grWG.Done()
-					return
-				}
-				s.connectToRoute(url, rtype, true, gossipMode, _EMPTY_)
-			})
+			c.mu.Lock()
+			c.route.startNewRoute = &routeInfo{
+				url:        url,
+				rtype:      rtype,
+				gossipMode: gossipMode,
+			}
+			c.sendPing()
+			c.mu.Unlock()
 		}
 	}
 	s.mu.Unlock()
@@ -2512,21 +2539,21 @@ func (s *Server) updateRouteSubscriptionMap(acc *Account, sub *subscription, del
 		// queue subscriptions updates (sub/unsub).
 		// See https://github.com/nats-io/nats-server/pull/1126 for more details.
 		if isq {
-			acc.sqmu.Lock()
+			acc.smu.Lock()
 		}
 		acc.mu.Lock()
 	}
 	accUnlock := func() {
 		acc.mu.Unlock()
 		if isq {
-			acc.sqmu.Unlock()
+			acc.smu.Unlock()
 		}
 	}
 
 	accLock()
 
 	// This is non-nil when we know we are in cluster mode.
-	rm, lqws := acc.rm, acc.lqws
+	rm, lws := acc.rm, acc.lws
 	if rm == nil {
 		accUnlock()
 		return
@@ -2546,9 +2573,7 @@ func (s *Server) updateRouteSubscriptionMap(acc *Account, sub *subscription, del
 		n += delta
 		if n <= 0 {
 			delete(rm, key)
-			if isq {
-				delete(lqws, key)
-			}
+			delete(lws, key)
 			update = true // Update for deleting (N->0)
 		} else {
 			rm[key] = n
@@ -2623,29 +2648,29 @@ func (s *Server) updateRouteSubscriptionMap(acc *Account, sub *subscription, del
 	trace := atomic.LoadInt32(&s.logging.trace) == 1
 	s.mu.RUnlock()
 
-	// If we are a queue subscriber we need to make sure our updates are serialized from
-	// potential multiple connections. We want to make sure that the order above is preserved
-	// here but not necessarily all updates need to be sent. We need to block and recheck the
-	// n count with the lock held through sending here. We will suppress duplicate sends of same qw.
-	if isq {
-		// However, we can't hold the acc.mu lock since we allow client.mu.Lock -> acc.mu.Lock
-		// but not the opposite. So use a dedicated lock while holding the route's lock.
-		acc.sqmu.Lock()
-		defer acc.sqmu.Unlock()
+	// We need to make sure our updates are serialized from potential multiple connections. We want
+	// to make sure that the order above is preserved here but not necessarily all updates need to
+	// be sent. We need to block and recheck the n count with the lock held through sending here.
+	//
+	// However, we can't hold the acc.mu lock since we allow client.mu.Lock -> acc.mu.Lock
+	// but not the opposite. So use a dedicated lock while holding the route's lock.
+	acc.smu.Lock()
+	defer acc.smu.Unlock()
 
-		acc.mu.Lock()
-		n = rm[key]
+	acc.mu.Lock()
+	n = rm[key]
+	if isq {
 		sub.qw = n
-		// Check the last sent weight here. If same, then someone
-		// beat us to it and we can just return here. Otherwise update
-		if ls, ok := lqws[key]; ok && ls == n {
-			acc.mu.Unlock()
-			return
-		} else if n > 0 {
-			lqws[key] = n
-		}
-		acc.mu.Unlock()
 	}
+	// Check the last sent value here. If same, then someone beat us to it and
+	// we can just return here. Otherwise update.
+	if ls, ok := lws[key]; ok && ls == n {
+		acc.mu.Unlock()
+		return
+	} else if n > 0 {
+		lws[key] = n
+	}
+	acc.mu.Unlock()
 
 	// Snapshot into array
 	subs := []*subscription{sub}
@@ -2876,6 +2901,7 @@ func (s *Server) connectToRoute(rURL *url.URL, rtype RouteType, firstConnect boo
 	excludedAddresses := s.routesToSelf
 	s.mu.RUnlock()
 
+	attemptDelay := routeConnectDelay
 	for attempts := 0; s.isRunning(); {
 		if tryForEver {
 			if !s.routeStillValid(rURL) {
@@ -2918,7 +2944,14 @@ func (s *Server) connectToRoute(rURL *url.URL, rtype RouteType, firstConnect boo
 			select {
 			case <-s.quitCh:
 				return
-			case <-time.After(routeConnectDelay):
+			case <-time.After(attemptDelay):
+				if opts.Cluster.ConnectBackoff {
+					// Use exponential backoff for connection attempts.
+					attemptDelay *= 2
+					if attemptDelay > routeConnectMaxDelay {
+						attemptDelay = routeConnectMaxDelay
+					}
+				}
 				continue
 			}
 		}

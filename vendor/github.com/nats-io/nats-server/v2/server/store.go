@@ -24,6 +24,7 @@ import (
 	"unsafe"
 
 	"github.com/nats-io/nats-server/v2/server/avl"
+	"github.com/nats-io/nats-server/v2/server/gsl"
 )
 
 // StorageType determines how messages are stored for retention.
@@ -34,8 +35,6 @@ const (
 	FileStorage = StorageType(22)
 	// MemoryStorage specifies in memory only.
 	MemoryStorage = StorageType(33)
-	// Any is for internals.
-	AnyStorage = StorageType(44)
 )
 
 var (
@@ -60,14 +59,14 @@ var (
 	ErrStoreWrongType = errors.New("wrong storage type")
 	// ErrNoAckPolicy is returned when trying to update a consumer's acks with no ack policy.
 	ErrNoAckPolicy = errors.New("ack policy is none")
-	// ErrInvalidSequence is returned when the sequence is not present in the stream store.
-	ErrInvalidSequence = errors.New("invalid sequence")
 	// ErrSequenceMismatch is returned when storing a raw message and the expected sequence is wrong.
 	ErrSequenceMismatch = errors.New("expected sequence does not match store")
 	// ErrCorruptStreamState
 	ErrCorruptStreamState = errors.New("stream state snapshot is corrupt")
 	// ErrTooManyResults
 	ErrTooManyResults = errors.New("too many matching results for request")
+	// ErrStoreOldUpdate is returned when a consumer update is older than the current state.
+	ErrStoreOldUpdate = errors.New("old update ignored")
 )
 
 // StoreMsg is the stored message format for messages that are retained by the Store layer.
@@ -87,19 +86,22 @@ type StorageUpdateHandler func(msgs, bytes int64, seq uint64, subj string)
 // Used to call back into the upper layers to remove a message.
 type StorageRemoveMsgHandler func(seq uint64)
 
-// Used to call back into the upper layers to report on newly created subject delete markers.
-type SubjectDeleteMarkerUpdateHandler func(*inMsg)
+// Used to call back into the upper layers to process a JetStream message.
+// Will propose the message if the stream is replicated.
+type ProcessJetStreamMsgHandler func(*inMsg)
 
 type StreamStore interface {
 	StoreMsg(subject string, hdr, msg []byte, ttl int64) (uint64, int64, error)
-	StoreRawMsg(subject string, hdr, msg []byte, seq uint64, ts int64, ttl int64) error
-	SkipMsg() uint64
+	StoreRawMsg(subject string, hdr, msg []byte, seq uint64, ts int64, ttl int64, discardNewCheck bool) error
+	SkipMsg(seq uint64) (uint64, error)
 	SkipMsgs(seq uint64, num uint64) error
+	FlushAllPending() error
 	LoadMsg(seq uint64, sm *StoreMsg) (*StoreMsg, error)
 	LoadNextMsg(filter string, wc bool, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
-	LoadNextMsgMulti(sl *Sublist, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
+	LoadNextMsgMulti(sl *gsl.SimpleSublist, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
 	LoadLastMsg(subject string, sm *StoreMsg) (*StoreMsg, error)
-	LoadPrevMsg(start uint64, smp *StoreMsg) (sm *StoreMsg, err error)
+	LoadPrevMsg(filter string, wc bool, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
+	LoadPrevMsgMulti(sl *gsl.SimpleSublist, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
 	RemoveMsg(seq uint64) (bool, error)
 	EraseMsg(seq uint64) (bool, error)
 	Purge() (uint64, error)
@@ -107,29 +109,31 @@ type StreamStore interface {
 	Compact(seq uint64) (uint64, error)
 	Truncate(seq uint64) error
 	GetSeqFromTime(t time.Time) uint64
-	FilteredState(seq uint64, subject string) SimpleState
+	FilteredState(seq uint64, subject string) (SimpleState, error)
 	SubjectsState(filterSubject string) map[string]SimpleState
 	SubjectsTotals(filterSubject string) map[string]uint64
 	AllLastSeqs() ([]uint64, error)
 	MultiLastSeqs(filters []string, maxSeq uint64, maxAllowed int) ([]uint64, error)
-	NumPending(sseq uint64, filter string, lastPerSubject bool) (total, validThrough uint64)
-	NumPendingMulti(sseq uint64, sl *Sublist, lastPerSubject bool) (total, validThrough uint64)
+	SubjectForSeq(seq uint64) (string, error)
+	NumPending(sseq uint64, filter string, lastPerSubject bool) (total, validThrough uint64, err error)
+	NumPendingMulti(sseq uint64, sl *gsl.SimpleSublist, lastPerSubject bool) (total, validThrough uint64, err error)
 	State() StreamState
 	FastState(*StreamState)
 	EncodedStreamState(failed uint64) (enc []byte, err error)
-	SyncDeleted(dbs DeleteBlocks)
+	SyncDeleted(dbs DeleteBlocks) error
 	Type() StorageType
 	RegisterStorageUpdates(StorageUpdateHandler)
-	RegisterStorageRemoveMsg(handler StorageRemoveMsgHandler)
-	RegisterSubjectDeleteMarkerUpdates(SubjectDeleteMarkerUpdateHandler)
+	RegisterStorageRemoveMsg(StorageRemoveMsgHandler)
+	RegisterProcessJetStreamMsg(ProcessJetStreamMsgHandler)
 	UpdateConfig(cfg *StreamConfig) error
-	Delete() error
+	Delete(inline bool) error
 	Stop() error
-	ConsumerStore(name string, cfg *ConsumerConfig) (ConsumerStore, error)
+	ConsumerStore(name string, created time.Time, cfg *ConsumerConfig) (ConsumerStore, error)
 	AddConsumer(o ConsumerStore) error
 	RemoveConsumer(o ConsumerStore) error
 	Snapshot(deadline time.Duration, includeConsumers, checkMsgs bool) (*SnapshotResult, error)
 	Utilization() (total, reported uint64, err error)
+	ResetState()
 }
 
 // RetentionPolicy determines how messages in a set are retained.
@@ -356,11 +360,14 @@ func (dbs DeleteBlocks) NumDeleted() (total uint64) {
 type ConsumerStore interface {
 	SetStarting(sseq uint64) error
 	UpdateStarting(sseq uint64)
+	Reset(sseq uint64) error
 	HasState() bool
 	UpdateDelivered(dseq, sseq, dc uint64, ts int64) error
 	UpdateAcks(dseq, sseq uint64) error
+	RemoveRedeliveredBelow(seq uint64)
 	UpdateConfig(cfg *ConsumerConfig) error
 	Update(*ConsumerState) error
+	ForceUpdate(*ConsumerState) error
 	State() (*ConsumerState, error)
 	BorrowState() (*ConsumerState, error)
 	EncodedState() ([]byte, error)
@@ -460,12 +467,6 @@ type Pending struct {
 	Timestamp int64
 }
 
-// TemplateStore stores templates.
-type TemplateStore interface {
-	Store(*streamTemplate) error
-	Delete(*streamTemplate) error
-}
-
 const (
 	limitsPolicyJSONString    = `"limits"`
 	interestPolicyJSONString  = `"interest"`
@@ -555,13 +556,11 @@ func (dp *DiscardPolicy) UnmarshalJSON(data []byte) error {
 const (
 	memoryStorageJSONString = `"memory"`
 	fileStorageJSONString   = `"file"`
-	anyStorageJSONString    = `"any"`
 )
 
 var (
 	memoryStorageJSONBytes = []byte(memoryStorageJSONString)
 	fileStorageJSONBytes   = []byte(fileStorageJSONString)
-	anyStorageJSONBytes    = []byte(anyStorageJSONString)
 )
 
 func (st StorageType) String() string {
@@ -570,8 +569,6 @@ func (st StorageType) String() string {
 		return "Memory"
 	case FileStorage:
 		return "File"
-	case AnyStorage:
-		return "Any"
 	default:
 		return "Unknown Storage Type"
 	}
@@ -583,8 +580,6 @@ func (st StorageType) MarshalJSON() ([]byte, error) {
 		return memoryStorageJSONBytes, nil
 	case FileStorage:
 		return fileStorageJSONBytes, nil
-	case AnyStorage:
-		return anyStorageJSONBytes, nil
 	default:
 		return nil, fmt.Errorf("can not marshal %v", st)
 	}
@@ -596,8 +591,6 @@ func (st *StorageType) UnmarshalJSON(data []byte) error {
 		*st = MemoryStorage
 	case fileStorageJSONString:
 		*st = FileStorage
-	case anyStorageJSONString:
-		*st = AnyStorage
 	default:
 		return fmt.Errorf("can not unmarshal %q", data)
 	}
@@ -605,15 +598,17 @@ func (st *StorageType) UnmarshalJSON(data []byte) error {
 }
 
 const (
-	ackNonePolicyJSONString     = `"none"`
-	ackAllPolicyJSONString      = `"all"`
-	ackExplicitPolicyJSONString = `"explicit"`
+	ackNonePolicyJSONString        = `"none"`
+	ackAllPolicyJSONString         = `"all"`
+	ackExplicitPolicyJSONString    = `"explicit"`
+	ackFlowControlPolicyJSONString = `"flow_control"`
 )
 
 var (
-	ackNonePolicyJSONBytes     = []byte(ackNonePolicyJSONString)
-	ackAllPolicyJSONBytes      = []byte(ackAllPolicyJSONString)
-	ackExplicitPolicyJSONBytes = []byte(ackExplicitPolicyJSONString)
+	ackNonePolicyJSONBytes        = []byte(ackNonePolicyJSONString)
+	ackAllPolicyJSONBytes         = []byte(ackAllPolicyJSONString)
+	ackExplicitPolicyJSONBytes    = []byte(ackExplicitPolicyJSONString)
+	ackFlowControlPolicyJSONBytes = []byte(ackFlowControlPolicyJSONString)
 )
 
 func (ap AckPolicy) MarshalJSON() ([]byte, error) {
@@ -624,6 +619,8 @@ func (ap AckPolicy) MarshalJSON() ([]byte, error) {
 		return ackAllPolicyJSONBytes, nil
 	case AckExplicit:
 		return ackExplicitPolicyJSONBytes, nil
+	case AckFlowControl:
+		return ackFlowControlPolicyJSONBytes, nil
 	default:
 		return nil, fmt.Errorf("can not marshal %v", ap)
 	}
@@ -637,6 +634,8 @@ func (ap *AckPolicy) UnmarshalJSON(data []byte) error {
 		*ap = AckAll
 	case ackExplicitPolicyJSONString:
 		*ap = AckExplicit
+	case ackFlowControlPolicyJSONString:
+		*ap = AckFlowControl
 	default:
 		return fmt.Errorf("can not unmarshal %q", data)
 	}
@@ -744,7 +743,7 @@ func isOutOfSpaceErr(err error) bool {
 var errFirstSequenceMismatch = errors.New("first sequence mismatch")
 
 func isClusterResetErr(err error) bool {
-	return err == errLastSeqMismatch || err == ErrStoreEOF || err == errFirstSequenceMismatch || errors.Is(err, errCatchupAbortedNoLeader) || err == errCatchupTooManyRetries
+	return err == errLastSeqMismatch || err == ErrStoreEOF || err == errFirstSequenceMismatch || errors.Is(err, errCatchupAbortedNoLeader) || err == errCatchupTooManyRetries || err == errAlreadyLeader
 }
 
 // Copy all fields.
