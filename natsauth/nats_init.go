@@ -70,11 +70,22 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 		return err
 	}
 
-	userCollection, err := initNATSAuthUsersCollection(m.ctx,
+	// create signing keys collection
+	signingKeysCollection, err := initNATSAuthSigningKeysCollection(m.ctx,
 		app,
 		m.logger,
 		apiRule,
 		accountCollection)
+	if err != nil {
+		return err
+	}
+
+	userCollection, err := initNATSAuthUsersCollection(m.ctx,
+		app,
+		m.logger,
+		apiRule,
+		accountCollection,
+		signingKeysCollection)
 	if err != nil {
 		return err
 	}
@@ -83,6 +94,7 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 	m.NATSAccountPendingCollection = pendingCollection
 	m.NATSUserCollection = userCollection
 	m.NATSLimitsCollection = limitCollection
+	m.NATSSigningKeysCollection = signingKeysCollection
 
 	return nil
 }
@@ -102,11 +114,16 @@ func initNATSAuthOperatorsCollection(ctx context.Context, app core.App,
 		return nil, err
 	}
 
-	collection.ListRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
-	collection.ViewRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
-	collection.CreateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
-	collection.UpdateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
-	collection.DeleteRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id)")
+	var teamsRule string
+	if teamsCollection != nil {
+		teamsRule = " && (teams:length = 0 || teams.members.id ?= @request.auth.id)"
+	}
+	
+	collection.ListRule = types.Pointer(rule + teamsRule)
+	collection.ViewRule = types.Pointer(rule + teamsRule)
+	collection.CreateRule = types.Pointer(rule + teamsRule)
+	collection.UpdateRule = types.Pointer(rule + teamsRule)
+	collection.DeleteRule = types.Pointer(rule + teamsRule)
 	collection.Indexes = types.JSONArray[string]{
 		"create unique index nats_operators_unique_url on keys (url)",
 		"create unique index nats_operators_unique_public_key on keys (public_key)",
@@ -154,12 +171,14 @@ func initNATSAuthOperatorsCollection(ctx context.Context, app core.App,
 	})
 	// If not teams are assigned everybody can access this operator / installation
 	// If one or more teams are assigned, then only the assigned teams can access this operator / installation
-	addOrUpdateField(collection, &core.RelationField{
-		Name:         "teams",
-		CollectionId: teamsCollection.Id,
-		MaxSelect:    10000,
-		MinSelect:    0,
-	})
+	if teamsCollection != nil {
+		addOrUpdateField(collection, &core.RelationField{
+			Name:         "teams",
+			CollectionId: teamsCollection.Id,
+			MaxSelect:    10000,
+			MinSelect:    0,
+		})
+	}
 
 	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)
 	if err := app.Save(collection); err != nil {
@@ -211,11 +230,17 @@ func initNATSAuthAccountsCollection(ctx context.Context,
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
-	collection.ListRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
-	collection.ViewRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
-	collection.CreateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
-	collection.UpdateRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
-	collection.DeleteRule = types.Pointer(rule + " && (teams:length = 0 || teams.members.id ?= @request.auth.id) && name != 'SYS'")
+	
+	var teamsRule string
+	if teamsCollection != nil {
+		teamsRule = " && (teams:length = 0 || teams.members.id ?= @request.auth.id)"
+	}
+	
+	collection.ListRule = types.Pointer(rule + teamsRule + " && name != 'SYS'")
+	collection.ViewRule = types.Pointer(rule + teamsRule + " && name != 'SYS'")
+	collection.CreateRule = types.Pointer(rule + teamsRule + " && name != 'SYS'")
+	collection.UpdateRule = types.Pointer(rule + teamsRule + " && name != 'SYS'")
+	collection.DeleteRule = types.Pointer(rule + teamsRule + " && name != 'SYS'")
 	collection.Indexes = types.JSONArray[string]{
 		"create unique index nats_accounts_unique_name_operator on keys (name,operator)",
 		"create unique index nats_accounts_unique_public_key on keys (public_key)",
@@ -271,12 +296,14 @@ func initNATSAuthAccountsCollection(ctx context.Context,
 	})
 	// If not teams are assigned everybody can access this account
 	// If one or more teams are assigned, then only the assigned teams can access this account
-	addOrUpdateField(collection, &core.RelationField{
-		Name:         "teams",
-		CollectionId: teamsCollection.Id,
-		MaxSelect:    10000,
-		MinSelect:    0,
-	})
+	if teamsCollection != nil {
+		addOrUpdateField(collection, &core.RelationField{
+			Name:         "teams",
+			CollectionId: teamsCollection.Id,
+			MaxSelect:    10000,
+			MinSelect:    0,
+		})
+	}
 
 	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)
 	if err := app.Save(collection); err != nil {
@@ -379,11 +406,76 @@ func initNATSAuthAccountsPendingCollection(ctx context.Context,
 	return collection, nil
 }
 
-func initNATSAuthUsersCollection(_ context.Context,
+func initNATSAuthSigningKeysCollection(_ context.Context,
 	app core.App,
 	_ *slog.Logger,
 	rule string,
 	accountCollection *core.Collection) (*core.Collection, error) {
+
+	collection, err := app.FindCollectionByNameOrId("nats_auth_signing_keys")
+
+	if err == sql.ErrNoRows {
+		collection = core.NewBaseCollection("nats_auth_signing_keys")
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	collection.ListRule = types.Pointer(rule)
+	collection.ViewRule = types.Pointer(rule)
+	collection.CreateRule = types.Pointer(rule)
+	collection.UpdateRule = types.Pointer(rule)
+	collection.DeleteRule = types.Pointer(rule)
+	collection.Indexes = types.JSONArray[string]{
+		"create unique index nats_signing_keys_unique_role_account on keys (role,account)",
+		"create unique index nats_signing_keys_unique_public_key on keys (public_key)",
+	}
+
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "role",
+		Required: true,
+	})
+	addOrUpdateField(collection, &core.RelationField{
+		Name:          "account",
+		Required:      true,
+		CollectionId:  accountCollection.Id,
+		MaxSelect:     1,
+		CascadeDelete: true,
+	})
+	addOrUpdateField(collection, &core.JSONField{
+		Name:     "publish",
+		Required: false,
+	})
+	addOrUpdateField(collection, &core.JSONField{
+		Name:     "subscribe",
+		Required: false,
+	})
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "public_key",
+		Required: false,
+	})
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "private_key",
+		Required: false,
+	})
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "seed",
+		Required: false,
+	})
+
+	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)
+	if err := app.Save(collection); err != nil {
+		return nil, err
+	}
+	return collection, nil
+}
+
+func initNATSAuthUsersCollection(_ context.Context,
+	app core.App,
+	_ *slog.Logger,
+	rule string,
+	accountCollection *core.Collection,
+	signingKeysCollection *core.Collection) (*core.Collection, error) {
 
 	collection, err := app.FindCollectionByNameOrId("nats_auth_users")
 
@@ -418,6 +510,12 @@ func initNATSAuthUsersCollection(_ context.Context,
 		CollectionId:  accountCollection.Id,
 		MaxSelect:     1,
 		CascadeDelete: true,
+	})
+	addOrUpdateField(collection, &core.RelationField{
+		Name:         "signing_key",
+		Required:     false,
+		CollectionId: signingKeysCollection.Id,
+		MaxSelect:    1,
 	})
 	addOrUpdateField(collection, &core.BoolField{
 		Name:     "bearer",

@@ -1,8 +1,8 @@
 import { pb } from "@/lib/pocketbase";
 import type { TeamsRecord, UsersRecord } from "@/lib/pocketbase-types";
 import { cn } from "@/lib/utils";
-import { getTeam } from "@/services/teams";
-import { getUsers } from "@/services/users";
+import { useTeam } from "@/services/teams";
+import { useUsers } from "@/services/users";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronsUpDown, Check, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -33,14 +33,14 @@ interface TeamMembershipDialogContentProps {
 export function TeamMembershipDialogContent({
 	teamId,
 }: TeamMembershipDialogContentProps) {
-	const { data, error, isLoading } = getUsers();
+	const { data, error, isLoading } = useUsers();
 
 	const {
 		data: teamData,
 		error: teamError,
 		isLoading: teamIsLoading,
 		mutate: teamMutate,
-	} = getTeam(teamId);
+	} = useTeam(teamId);
 
 	if (error || teamError) {
 		return <div>Error loading team members</div>;

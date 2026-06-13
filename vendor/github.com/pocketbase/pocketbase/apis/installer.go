@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/osutils"
+	"github.com/pocketbase/pocketbase/ui"
 )
 
 // DefaultInstallerFunc is the default PocketBase installer function.
@@ -22,17 +23,22 @@ import (
 //
 // See https://github.com/pocketbase/pocketbase/discussions/5814.
 func DefaultInstallerFunc(app core.App, systemSuperuser *core.Record, baseURL string) error {
+	if ui.DistDirFS == nil {
+		color.Magenta("You can create your first superuser by running: %s superuser upsert EMAIL PASS", executablePath())
+		return nil
+	}
+
 	token, err := systemSuperuser.NewStaticAuthToken(30 * time.Minute)
 	if err != nil {
 		return err
 	}
 
 	// launch url (ignore errors and always print a help text as fallback)
-	url := fmt.Sprintf("%s/_/#/pbinstal/%s", strings.TrimRight(baseURL, "/"), token)
+	url := fmt.Sprintf("%s/_/#/pbinstall/%s", strings.TrimRight(baseURL, "/"), token)
 	_ = osutils.LaunchURL(url)
 	color.Magenta("\n(!) Launch the URL below in the browser if it hasn't been open already to create your first superuser account:")
 	color.New(color.Bold).Add(color.FgCyan).Println(url)
-	color.New(color.FgHiBlack, color.Italic).Printf("(you can also create your first superuser by running: %s superuser upsert EMAIL PASS)\n\n", os.Args[0])
+	color.New(color.FgHiBlack, color.Italic).Printf("(you can also create your first superuser by running: %s superuser upsert EMAIL PASS)\n\n", executablePath())
 
 	return nil
 }
@@ -85,4 +91,12 @@ func findOrCreateInstallerSuperuser(app core.App) (*core.Record, error) {
 	}
 
 	return record, nil
+}
+
+func executablePath() string {
+	if osutils.IsProbablyGoRun() {
+		return "go run ."
+	}
+
+	return os.Args[0]
 }

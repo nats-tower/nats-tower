@@ -3,7 +3,7 @@ import { pb } from "@/lib/pocketbase";
 import type { NatsAuthOperatorsRecord } from "@/lib/pocketbase-types";
 import useSWR from "swr";
 
-export function getInstallations() {
+export function useInstallations() {
 	return useSWR(["/installations"], async ([_]) => {
 		return pb
 			.collection<NatsAuthOperatorsRecord>("nats_auth_operators")
@@ -11,7 +11,7 @@ export function getInstallations() {
 	});
 }
 
-export function getInstallationById(installationId: string) {
+export function useInstallationById(installationId: string) {
 	return useSWR(
 		[`/installations/${installationId}`, installationId],
 		async ([_, pInstallationId]) => {
@@ -25,7 +25,7 @@ export function getInstallationById(installationId: string) {
 	);
 }
 
-export function getInstallationByIdWithTeams(installationId: string) {
+export function useInstallationByIdWithTeams(installationId: string) {
 	return useSWR(
 		[`/installations_with_teams/${installationId}`, installationId],
 		async ([_, pInstallationId]) => {
@@ -38,7 +38,7 @@ export function getInstallationByIdWithTeams(installationId: string) {
 	);
 }
 
-export function getInstallationsTeams(installationId: string) {
+export function useInstallationsTeams(installationId: string) {
 	return useSWR(
 		[`/installations_with_teams/${installationId}`, installationId],
 		async ([_, pInstallationId]) => {

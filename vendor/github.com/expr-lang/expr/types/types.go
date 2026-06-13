@@ -44,7 +44,7 @@ func TypeOf(v any) Type {
 type anyType struct{}
 
 func (anyType) Nature() Nature {
-	return FromType(nil)
+	return Nature{Type: nil}
 }
 
 func (anyType) Equal(t Type) bool {
@@ -58,7 +58,7 @@ func (anyType) String() string {
 type nilType struct{}
 
 func (nilType) Nature() Nature {
-	return NatureOf(nil)
+	return Nature{Nil: true}
 }
 
 func (nilType) Equal(t Type) bool {
@@ -77,7 +77,7 @@ type rtype struct {
 }
 
 func (r rtype) Nature() Nature {
-	return FromType(r.t)
+	return Nature{Type: r.t}
 }
 
 func (r rtype) Equal(t Type) bool {
@@ -100,12 +100,11 @@ type Map map[string]Type
 const Extra = "[[__extra_keys__]]"
 
 func (m Map) Nature() Nature {
-	nt := NatureOf(map[string]any{})
-	if nt.TypeData == nil {
-		nt.TypeData = new(TypeData)
+	nt := Nature{
+		Type:   reflect.TypeOf(map[string]any{}),
+		Fields: make(map[string]Nature, len(m)),
+		Strict: true,
 	}
-	nt.Fields = make(map[string]Nature, len(m))
-	nt.Strict = true
 	for k, v := range m {
 		if k == Extra {
 			nt.Strict = false
@@ -156,13 +155,11 @@ type array struct {
 
 func (a array) Nature() Nature {
 	of := a.of.Nature()
-	nt := NatureOf([]any{})
-	if nt.TypeData == nil {
-		nt.TypeData = new(TypeData)
+	return Nature{
+		Type:    reflect.TypeOf([]any{}),
+		Fields:  make(map[string]Nature, 1),
+		ArrayOf: &of,
 	}
-	nt.Fields = make(map[string]Nature, 1)
-	nt.Ref = &of
-	return nt
 }
 
 func (a array) Equal(t Type) bool {

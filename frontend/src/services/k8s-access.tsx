@@ -2,7 +2,7 @@ import { pb } from "@/lib/pocketbase";
 import type { NatsAuthK8sAccessResponse } from "@/lib/pocketbase-types";
 import useSWR from "swr";
 
-export function getK8sAccessForAccount(accountId: string) {
+export function useK8sAccessForAccount(accountId: string) {
 	return useSWR(
 		[`/accounts/${accountId}/k8s_access`, accountId],
 		async ([_, pAccountId]) => {

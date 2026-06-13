@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"io/fs"
+	"net"
 	"net/http"
 	"time"
 
@@ -56,6 +58,9 @@ type baseCollectionEventData struct {
 	Collection *Collection
 }
 
+// @todo consider storing the original collection name and use that as a tag
+// to avoid the  ambiguity when the collection is being modified (#7613);
+// for new collection also maybe return empty tags?
 func (e *baseCollectionEventData) Tags() []string {
 	if e.Collection == nil {
 		return nil
@@ -104,6 +109,11 @@ type ServeEvent struct {
 	Server      *http.Server
 	CertManager *autocert.Manager
 
+	// Listener allow specifying a custom network listener.
+	//
+	// Leave it nil to use the default net.Listen("tcp", e.Server.Addr).
+	Listener net.Listener
+
 	// InstallerFunc is the "installer" function that is called after
 	// successful server tcp bind but only if there is no explicit
 	// superuser record created yet.
@@ -119,6 +129,21 @@ type ServeEvent struct {
 	//
 	// Set it to nil if you want to skip the installer.
 	InstallerFunc func(app App, systemSuperuser *Record, baseURL string) error
+
+	// @todo experimental
+	//
+	// UIExtensions is a list with the superuser UI extensions.
+	UIExtensions []UIExtension
+}
+
+type UIExtension struct {
+	// Name is the name of the extension.
+	// It is also used as path segment for the registered public extension endpoint
+	// (e.g. /_/extensions/{name}/*)
+	Name string
+
+	// FS is the extension file system.
+	FS fs.FS
 }
 
 // -------------------------------------------------------------------
@@ -378,6 +403,13 @@ type FileDownloadRequestEvent struct {
 	FileField  *FileField
 	ServedPath string
 	ServedName string
+
+	// ThumbError indicates the a thumb wasn't able to be generated
+	// (e.g. because it didn't satisfy the support image formats or it timed out).
+	//
+	// Note that PocketBase fallbacks to the original file in case of a thumb error,
+	// but developers can check the field and provide their own custom thumb generation if necessary.
+	ThumbError error
 }
 
 // -------------------------------------------------------------------
@@ -416,8 +448,24 @@ type RealtimeConnectRequestEvent struct {
 
 	Client subscriptions.Client
 
-	// note: modifying it after the connect has no effect
+	// IdleTimeout specifies the max duration to wait for a new message
+	// before closing the connection.
+	//
+	// Modifying the value after the connection has been established has no effect.
+	//
+	// Defaults to 5 minutes.
 	IdleTimeout time.Duration
+
+	// MaxTimeout specifies the maximum duration a realtime connection
+	// can remain open (including even if there are ongoing messages).
+	//
+	// Once the specified duration expires, the current connection will
+	// be terminated, until a client reconnect is issued (if the client is still active).
+	//
+	// Modifying the value after the connection has been established has no effect.
+	//
+	// Defaults to 30 minutes.
+	MaxTimeout time.Duration
 }
 
 type RealtimeMessageEvent struct {

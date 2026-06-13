@@ -77,10 +77,7 @@ func AccessTime() int64 {
 	// Return last updated time.
 	v := utime.Load()
 	if v == 0 {
-		// Always register a time, the worst case is a stale time.
-		// On startup, we can register in parallel and could previously panic.
-		v = time.Now().UnixNano()
-		utime.Store(v)
+		panic("access time service not running")
 	}
 	return v
 }

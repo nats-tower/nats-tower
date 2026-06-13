@@ -4,6 +4,8 @@ import type {
 	NatsAuthAccountsRecord,
 	NatsAuthOperatorsRecord,
 	NatsAuthUsersRecord,
+	NatsAuthSigningKeysRecord,
+	NatsAuthUsersResponse,
 } from "@/lib/pocketbase-types";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,11 +33,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 
+type UserWithRole = NatsAuthUsersResponse<{ signing_key: NatsAuthSigningKeysRecord }>;
+
 export function getUsersColumns(
 	accountData: NatsAuthAccountsRecord,
 	installationData: NatsAuthOperatorsRecord,
 	mutateUsers: () => void,
-): ColumnDef<NatsAuthUsersRecord>[] {
+): ColumnDef<UserWithRole>[] {
 	return [
 		{
 			id: "name",
@@ -49,6 +53,14 @@ export function getUsersColumns(
 			id: "description",
 			accessorKey: "description",
 			header: "Description",
+		},
+		{
+			id: "role",
+			header: "Role",
+			cell: ({ row }) => {
+				const signingKey = row.original.expand?.signing_key;
+				return signingKey ? <div>{signingKey.role}</div> : <div className="text-gray-400">-</div>;
+			},
 		},
 		{
 			id: "actions",

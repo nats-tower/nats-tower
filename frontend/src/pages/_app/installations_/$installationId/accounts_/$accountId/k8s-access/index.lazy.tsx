@@ -17,9 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, Save } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
-import { getAccountById } from "@/services/accounts";
-import { getInstallationById } from "@/services/installations";
-import { getK8sAccessForAccount } from "@/services/k8s-access";
+import { useAccountById } from "@/services/accounts";
+import { useInstallationById } from "@/services/installations";
+import { useK8sAccessForAccount } from "@/services/k8s-access";
 import { getK8sAccessColumns } from "@/components/ui/k8s-access/k8s-access-columns";
 
 export const Route = createLazyFileRoute(
@@ -37,20 +37,20 @@ function K8sAccess() {
 		data: installationData,
 		error: installationError,
 		isLoading: installationLoading,
-	} = getInstallationById(installationId);
+	} = useInstallationById(installationId);
 
 	const {
 		data: accountData,
 		error: accountError,
 		isLoading: accountLoading,
-	} = getAccountById(installationId, accountId);
+	} = useAccountById(installationId, accountId);
 
 	const {
 		data: k8sAccessData,
 		error: k8sAccessError,
 		isLoading: k8sAccessLoading,
 		mutate: mutateK8sAccess,
-	} = getK8sAccessForAccount(accountId);
+	} = useK8sAccessForAccount(accountId);
 
 	if (installationError || accountError || k8sAccessError)
 		return <div>failed to load</div>;

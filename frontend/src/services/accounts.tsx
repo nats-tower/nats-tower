@@ -6,7 +6,7 @@ import type {
 } from "@/lib/pocketbase-types";
 import useSWR from "swr";
 
-export function getPendingAccountActions(installationId: string) {
+export function usePendingAccountActions(installationId: string) {
 	return useSWR(
 		[
 			`/installations/${installationId}/pending_account_actions`,
@@ -23,7 +23,7 @@ export function getPendingAccountActions(installationId: string) {
 	);
 }
 
-export function getAccountsWithTeams(installationId: string) {
+export function useAccountsWithTeams(installationId: string) {
 	return useSWR(
 		[`/installations/${installationId}/accounts_with_teams`, installationId],
 		async ([_, pInstallationId]) => {
@@ -40,7 +40,7 @@ export function getAccountsWithTeams(installationId: string) {
 	);
 }
 
-export function getAccountById(installationId: string, accountId: string) {
+export function useAccountById(installationId: string, accountId: string) {
 	return useSWR(
 		[
 			`/installations/${installationId}/accounts/${accountId}`,
@@ -63,7 +63,7 @@ export function getAccountById(installationId: string, accountId: string) {
 	);
 }
 
-export function getAccountByIdWithTeams(
+export function useAccountByIdWithTeams(
 	installationId: string,
 	accountId: string,
 ) {

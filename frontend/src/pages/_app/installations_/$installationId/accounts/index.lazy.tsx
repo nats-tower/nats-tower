@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { PlusIcon } from "lucide-react";
 import { useState } from "react";
-import { getInstallationByIdWithTeams } from "@/services/installations";
-import { getTeams } from "@/services/teams";
+import { useInstallationByIdWithTeams } from "@/services/installations";
+import { useTeams } from "@/services/teams";
 import {
-	getAccountsWithTeams,
-	getPendingAccountActions,
+	useAccountsWithTeams,
+	usePendingAccountActions,
 } from "@/services/accounts";
 import { AddAccountDialogContent } from "@/components/ui/accounts/add-account-dialog";
 import { DataTable } from "@/components/ui/data-table";
@@ -29,27 +29,27 @@ function Accounts() {
 		data: installationData,
 		error: installationError,
 		isLoading: installationLoading,
-	} = getInstallationByIdWithTeams(installationId);
+	} = useInstallationByIdWithTeams(installationId);
 
 	const {
 		data: teamsData,
 		error: teamsError,
 		isLoading: teamsLoading,
-	} = getTeams();
+	} = useTeams();
 
 	const {
 		data: pendingAccountActionsData,
 		error: pendingAccountActionsError,
 		isLoading: pendingAccountActionsLoading,
 		mutate: mutatePendingAccountActions,
-	} = getPendingAccountActions(installationId);
+	} = usePendingAccountActions(installationId);
 
 	const {
 		data: accountsData,
 		error: accountsError,
 		isLoading: accountsLoading,
 		mutate: mutateAccounts,
-	} = getAccountsWithTeams(installationId);
+	} = useAccountsWithTeams(installationId);
 
 	if (
 		installationError ||

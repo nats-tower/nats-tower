@@ -31,7 +31,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -212,7 +211,6 @@ func (c *client) wsRead(r *wsReadInfo, ior io.Reader, buf []byte) ([][]byte, err
 		err    error
 		pos    int
 		max    = len(buf)
-		mpay   = int(atomic.LoadInt32(&c.mpay))
 	)
 	for pos != max {
 		if r.fs {
@@ -326,7 +324,7 @@ func (c *client) wsRead(r *wsReadInfo, ior io.Reader, buf []byte) ([][]byte, err
 				// When we have the final frame and we have read the full payload,
 				// we can decompress it.
 				if r.ff && r.rem == 0 {
-					b, err = r.decompress(mpay)
+					b, err = r.decompress()
 					if err != nil {
 						return bufs, err
 					}
@@ -400,16 +398,7 @@ func (r *wsReadInfo) ReadByte() (byte, error) {
 	return b, nil
 }
 
-// decompress decompresses the collected buffers.
-// The size of the decompressed buffer will be limited to the `mpay` value.
-// If, while decompressing, the resulting uncompressed buffer exceeds this
-// limit, the decompression stops and an empty buffer and the ErrMaxPayload
-// error are returned.
-func (r *wsReadInfo) decompress(mpay int) ([]byte, error) {
-	// If not limit is specified, use the default maximum payload size.
-	if mpay <= 0 {
-		mpay = MAX_PAYLOAD_SIZE
-	}
+func (r *wsReadInfo) decompress() ([]byte, error) {
 	r.coff = 0
 	// As per https://tools.ietf.org/html/rfc7692#section-7.2.2
 	// add 0x00, 0x00, 0xff, 0xff and then a final block so that flate reader
@@ -424,15 +413,8 @@ func (r *wsReadInfo) decompress(mpay int) ([]byte, error) {
 	} else {
 		d.(flate.Resetter).Reset(r, nil)
 	}
-	// Use a LimitedReader to limit the decompressed size.
-	// We use "limit+1" bytes for "N" so we can detect if the limit is exceeded.
-	lr := io.LimitedReader{R: d, N: int64(mpay + 1)}
-	b, err := io.ReadAll(&lr)
-	if err == nil && len(b) > mpay {
-		// Decompressed data exceeds the maximum payload size.
-		b, err = nil, ErrMaxPayload
-	}
-	lr.R = nil
+	// This will do the decompression.
+	b, err := io.ReadAll(d)
 	decompressorPool.Put(d)
 	// Now reset the compressed buffers list.
 	r.cbufs = nil
@@ -1165,23 +1147,20 @@ func (s *Server) startWebsocketServer() {
 	// regardless of NoTLS. If we don't have a TLS config, it means that the
 	// user has configured NoTLS because otherwise the server would have failed
 	// to start due to options validation.
-	var config *tls.Config
 	if o.TLSConfig != nil {
 		proto = wsSchemePrefixTLS
-		config = o.TLSConfig.Clone()
+		config := o.TLSConfig.Clone()
 		config.GetConfigForClient = s.wsGetTLSConfig
+		hl, err = tls.Listen("tcp", hp, config)
 	} else {
 		proto = wsSchemePrefix
+		hl, err = net.Listen("tcp", hp)
 	}
-	hl, err = natsListen("tcp", hp)
 	s.websocket.listenerErr = err
 	if err != nil {
 		s.mu.Unlock()
 		s.Fatalf("Unable to listen for websocket connections: %v", err)
 		return
-	}
-	if config != nil {
-		hl = tls.NewListener(hl, config)
 	}
 	if port == 0 {
 		o.Port = hl.Addr().(*net.TCPAddr).Port
@@ -1312,7 +1291,7 @@ func (s *Server) createWSClient(conn net.Conn, ws *websocket) *client {
 	}
 	c.initClient()
 	c.Debugf("Client connection created")
-	c.sendProtoNow(c.generateClientInfoJSON(info, true))
+	c.sendProtoNow(c.generateClientInfoJSON(info))
 	c.mu.Unlock()
 
 	s.mu.Lock()

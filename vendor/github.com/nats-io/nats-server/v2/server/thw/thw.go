@@ -48,12 +48,6 @@ type HashWheel struct {
 	count  uint64  // How many entries are present?
 }
 
-// HashWheelEntry represents a single entry in the wheel.
-type HashWheelEntry struct {
-	Seq     uint64
-	Expires int64
-}
-
 // NewHashWheel initializes a new HashWheel.
 func NewHashWheel() *HashWheel {
 	return &HashWheel{
@@ -65,6 +59,17 @@ func NewHashWheel() *HashWheel {
 // getPosition calculates the slot position for a given expiration time.
 func (hw *HashWheel) getPosition(expires int64) int64 {
 	return (expires / tickDuration) & wheelMask
+}
+
+// updateLowestExpires finds the new lowest expiration time across all slots.
+func (hw *HashWheel) updateLowestExpires() {
+	lowest := int64(math.MaxInt64)
+	for _, s := range hw.wheel {
+		if s != nil && s.lowest < lowest {
+			lowest = s.lowest
+		}
+	}
+	hw.lowest = lowest
 }
 
 // newSlot creates a new slot.
@@ -115,7 +120,22 @@ func (hw *HashWheel) Remove(seq uint64, expires int64) error {
 	// If the slot is empty, we can set it to nil to free memory.
 	if len(s.entries) == 0 {
 		hw.wheel[pos] = nil
+	} else if expires == s.lowest {
+		// Find new lowest in this slot.
+		lowest := int64(math.MaxInt64)
+		for _, exp := range s.entries {
+			if exp < lowest {
+				lowest = exp
+			}
+		}
+		s.lowest = lowest
 	}
+
+	// If we removed the global lowest, find the new one.
+	if expires == hw.lowest {
+		hw.updateLowestExpires()
+	}
+
 	return nil
 }
 
@@ -132,49 +152,51 @@ func (hw *HashWheel) Update(seq uint64, oldExpires int64, newExpires int64) erro
 // ExpireTasks processes all expired tasks using a callback, but only expires a task if the callback returns true.
 func (hw *HashWheel) ExpireTasks(callback func(seq uint64, expires int64) bool) {
 	now := time.Now().UnixNano()
-	hw.expireTasks(now, callback)
-}
 
-func (hw *HashWheel) expireTasks(ts int64, callback func(seq uint64, expires int64) bool) {
 	// Quick return if nothing is expired.
-	if hw.lowest > ts {
+	if hw.lowest > now {
 		return
 	}
 
-	globalLowest := int64(math.MaxInt64)
-	for pos, s := range hw.wheel {
-		// Skip s if nothing to expire.
-		if s == nil || s.lowest > ts {
-			if s != nil && s.lowest < globalLowest {
-				globalLowest = s.lowest
+	// Start from the slot containing the lowest expiration.
+	startPos, exitPos := hw.getPosition(hw.lowest), hw.getPosition(now+tickDuration)
+	var updateLowest bool
+
+	for offset := int64(0); ; offset++ {
+		pos := (startPos + offset) & wheelMask
+		if pos == exitPos {
+			if updateLowest {
+				hw.updateLowestExpires()
 			}
+			return
+		}
+		// Grab our slot.
+		slot := hw.wheel[pos]
+		if slot == nil || slot.lowest > now {
 			continue
 		}
 
 		// Track new lowest while processing expirations
-		slotLowest := int64(math.MaxInt64)
-		for seq, expires := range s.entries {
-			if expires <= ts && callback(seq, expires) {
-				delete(s.entries, seq)
+		newLowest := int64(math.MaxInt64)
+		for seq, expires := range slot.entries {
+			if expires <= now && callback(seq, expires) {
+				delete(slot.entries, seq)
 				hw.count--
+				updateLowest = true
 				continue
 			}
-			if expires < slotLowest {
-				slotLowest = expires
+			if expires < newLowest {
+				newLowest = expires
 			}
 		}
 
 		// Nil out if we are empty.
-		if len(s.entries) == 0 {
+		if len(slot.entries) == 0 {
 			hw.wheel[pos] = nil
 		} else {
-			s.lowest = slotLowest
-			if slotLowest < globalLowest {
-				globalLowest = slotLowest
-			}
+			slot.lowest = newLowest
 		}
 	}
-	hw.lowest = globalLowest
 }
 
 // GetNextExpiration returns the earliest expiration time before the given time.
@@ -191,7 +213,7 @@ func (hw *HashWheel) Count() uint64 {
 	return hw.count
 }
 
-// Encode writes out the contents of the THW into a binary snapshot
+// AppendEncode writes out the contents of the THW into a binary snapshot
 // and returns it. The high seq number is included in the snapshot and will
 // be returned on decode.
 func (hw *HashWheel) Encode(highSeq uint64) []byte {

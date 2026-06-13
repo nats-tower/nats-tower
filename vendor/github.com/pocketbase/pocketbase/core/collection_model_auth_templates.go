@@ -2,11 +2,12 @@ package core
 
 // Common settings placeholder tokens
 const (
-	EmailPlaceholderAppName string = "{APP_NAME}"
-	EmailPlaceholderAppURL  string = "{APP_URL}"
-	EmailPlaceholderToken   string = "{TOKEN}"
-	EmailPlaceholderOTP     string = "{OTP}"
-	EmailPlaceholderOTPId   string = "{OTP_ID}"
+	EmailPlaceholderAppName   string = "{APP_NAME}"
+	EmailPlaceholderAppURL    string = "{APP_URL}"
+	EmailPlaceholderToken     string = "{TOKEN}"
+	EmailPlaceholderOTP       string = "{OTP}"
+	EmailPlaceholderOTPId     string = "{OTP_ID}"
+	EmailPlaceholderAlertInfo string = "{ALERT_INFO}"
 )
 
 var defaultVerificationTemplate = EmailTemplate{
@@ -17,6 +18,7 @@ var defaultVerificationTemplate = EmailTemplate{
 <p>
   <a class="btn" href="` + EmailPlaceholderAppURL + "/_/#/auth/confirm-verification/" + EmailPlaceholderToken + `" target="_blank" rel="noopener">Verify</a>
 </p>
+<p><i>If you didn't recently register, please ignore this email.</i></p>
 <p>
   Thanks,<br/>
   ` + EmailPlaceholderAppName + ` team
@@ -30,7 +32,7 @@ var defaultResetPasswordTemplate = EmailTemplate{
 <p>
   <a class="btn" href="` + EmailPlaceholderAppURL + "/_/#/auth/confirm-password-reset/" + EmailPlaceholderToken + `" target="_blank" rel="noopener">Reset password</a>
 </p>
-<p><i>If you didn't ask to reset your password, you can ignore this email.</i></p>
+<p><i>If you didn't ask to reset your password, please ignore this email.</i></p>
 <p>
   Thanks,<br/>
   ` + EmailPlaceholderAppName + ` team
@@ -44,7 +46,7 @@ var defaultConfirmEmailChangeTemplate = EmailTemplate{
 <p>
   <a class="btn" href="` + EmailPlaceholderAppURL + "/_/#/auth/confirm-email-change/" + EmailPlaceholderToken + `" target="_blank" rel="noopener">Confirm new email</a>
 </p>
-<p><i>If you didn't ask to change your email address, you can ignore this email.</i></p>
+<p><i>If you didn't ask to change your email address, please ignore this email.</i></p>
 <p>
   Thanks,<br/>
   ` + EmailPlaceholderAppName + ` team
@@ -65,9 +67,10 @@ var defaultOTPTemplate = EmailTemplate{
 var defaultAuthAlertTemplate = EmailTemplate{
 	Subject: "Login from a new location",
 	Body: `<p>Hello,</p>
-<p>We noticed a login to your ` + EmailPlaceholderAppName + ` account from a new location.</p>
-<p>If this was you, you may disregard this email.</p>
+<p>We noticed a login to your ` + EmailPlaceholderAppName + ` account from a new location:</p>
+<p><em>` + EmailPlaceholderAlertInfo + `</em></p>
 <p><strong>If this wasn't you, you should immediately change your ` + EmailPlaceholderAppName + ` account password to revoke access from all other locations.</strong></p>
+<p>If this was you, you may disregard this email.</p>
 <p>
   Thanks,<br/>
   ` + EmailPlaceholderAppName + ` team

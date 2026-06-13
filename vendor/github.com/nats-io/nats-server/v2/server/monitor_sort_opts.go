@@ -1,4 +1,4 @@
-// Copyright 2013-2025 The NATS Authors
+// Copyright 2013-2023 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -50,64 +50,64 @@ const (
 
 // Individual sort options provide the Less for sort.Interface. Len and Swap are on cList.
 // CID
-type SortByCid struct{ ConnInfos }
+type byCid struct{ ConnInfos }
 
-func (l SortByCid) Less(i, j int) bool { return l.ConnInfos[i].Cid < l.ConnInfos[j].Cid }
+func (l byCid) Less(i, j int) bool { return l.ConnInfos[i].Cid < l.ConnInfos[j].Cid }
 
 // Number of Subscriptions
-type SortBySubs struct{ ConnInfos }
+type bySubs struct{ ConnInfos }
 
-func (l SortBySubs) Less(i, j int) bool { return l.ConnInfos[i].NumSubs < l.ConnInfos[j].NumSubs }
+func (l bySubs) Less(i, j int) bool { return l.ConnInfos[i].NumSubs < l.ConnInfos[j].NumSubs }
 
 // Pending Bytes
-type SortByPending struct{ ConnInfos }
+type byPending struct{ ConnInfos }
 
-func (l SortByPending) Less(i, j int) bool { return l.ConnInfos[i].Pending < l.ConnInfos[j].Pending }
+func (l byPending) Less(i, j int) bool { return l.ConnInfos[i].Pending < l.ConnInfos[j].Pending }
 
 // Outbound Msgs
-type SortByOutMsgs struct{ ConnInfos }
+type byOutMsgs struct{ ConnInfos }
 
-func (l SortByOutMsgs) Less(i, j int) bool { return l.ConnInfos[i].OutMsgs < l.ConnInfos[j].OutMsgs }
+func (l byOutMsgs) Less(i, j int) bool { return l.ConnInfos[i].OutMsgs < l.ConnInfos[j].OutMsgs }
 
 // Inbound Msgs
-type SortByInMsgs struct{ ConnInfos }
+type byInMsgs struct{ ConnInfos }
 
-func (l SortByInMsgs) Less(i, j int) bool { return l.ConnInfos[i].InMsgs < l.ConnInfos[j].InMsgs }
+func (l byInMsgs) Less(i, j int) bool { return l.ConnInfos[i].InMsgs < l.ConnInfos[j].InMsgs }
 
 // Outbound Bytes
-type SortByOutBytes struct{ ConnInfos }
+type byOutBytes struct{ ConnInfos }
 
-func (l SortByOutBytes) Less(i, j int) bool { return l.ConnInfos[i].OutBytes < l.ConnInfos[j].OutBytes }
+func (l byOutBytes) Less(i, j int) bool { return l.ConnInfos[i].OutBytes < l.ConnInfos[j].OutBytes }
 
 // Inbound Bytes
-type SortByInBytes struct{ ConnInfos }
+type byInBytes struct{ ConnInfos }
 
-func (l SortByInBytes) Less(i, j int) bool { return l.ConnInfos[i].InBytes < l.ConnInfos[j].InBytes }
+func (l byInBytes) Less(i, j int) bool { return l.ConnInfos[i].InBytes < l.ConnInfos[j].InBytes }
 
 // Last Activity
-type SortByLast struct{ ConnInfos }
+type byLast struct{ ConnInfos }
 
-func (l SortByLast) Less(i, j int) bool {
+func (l byLast) Less(i, j int) bool {
 	return l.ConnInfos[i].LastActivity.UnixNano() < l.ConnInfos[j].LastActivity.UnixNano()
 }
 
 // Idle time
-type SortByIdle struct {
+type byIdle struct {
 	ConnInfos
 	now time.Time
 }
 
-func (l SortByIdle) Less(i, j int) bool {
+func (l byIdle) Less(i, j int) bool {
 	return l.now.Sub(l.ConnInfos[i].LastActivity) < l.now.Sub(l.ConnInfos[j].LastActivity)
 }
 
 // Uptime
-type SortByUptime struct {
+type byUptime struct {
 	ConnInfos
 	now time.Time
 }
 
-func (l SortByUptime) Less(i, j int) bool {
+func (l byUptime) Less(i, j int) bool {
 	ci := l.ConnInfos[i]
 	cj := l.ConnInfos[j]
 	var upi, upj time.Duration
@@ -125,25 +125,25 @@ func (l SortByUptime) Less(i, j int) bool {
 }
 
 // Stop
-type SortByStop struct{ ConnInfos }
+type byStop struct{ ConnInfos }
 
-func (l SortByStop) Less(i, j int) bool {
+func (l byStop) Less(i, j int) bool {
 	ciStop := l.ConnInfos[i].Stop
 	cjStop := l.ConnInfos[j].Stop
 	return ciStop.Before(*cjStop)
 }
 
 // Reason
-type SortByReason struct{ ConnInfos }
+type byReason struct{ ConnInfos }
 
-func (l SortByReason) Less(i, j int) bool {
+func (l byReason) Less(i, j int) bool {
 	return l.ConnInfos[i].Reason < l.ConnInfos[j].Reason
 }
 
 // RTT - Default is descending
-type SortByRTT struct{ ConnInfos }
+type byRTT struct{ ConnInfos }
 
-func (l SortByRTT) Less(i, j int) bool { return l.ConnInfos[i].rtt < l.ConnInfos[j].rtt }
+func (l byRTT) Less(i, j int) bool { return l.ConnInfos[i].rtt < l.ConnInfos[j].rtt }
 
 // IsValid determines if a sort option is valid
 func (s SortOpt) IsValid() bool {

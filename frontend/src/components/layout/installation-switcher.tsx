@@ -23,7 +23,7 @@ import { PlusIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { Dialog, DialogTrigger } from "../ui/dialog";
 import { AddInstallationDialogContent } from "../ui/installations/add-installation-dialog";
-import { getInstallations } from "@/services/installations";
+import { useInstallations } from "@/services/installations";
 import { pb } from "@/lib/pocketbase";
 
 function getActiveInstallation(
@@ -48,7 +48,7 @@ export function InstallationSwitcher() {
 	const { resolvedLocation } = useRouterState();
 	const { isMobile } = useSidebar();
 
-	const { data, error, isLoading, mutate } = getInstallations();
+	const { data, error, isLoading, mutate } = useInstallations();
 
 	if (error) return <div>failed to load</div>;
 	if (isLoading) return <div>loading...</div>;
@@ -162,7 +162,7 @@ export function InstallationSwitcher() {
 						</SidebarMenuButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
-						className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+						className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
 						align="start"
 						side={isMobile ? "bottom" : "right"}
 						sideOffset={4}

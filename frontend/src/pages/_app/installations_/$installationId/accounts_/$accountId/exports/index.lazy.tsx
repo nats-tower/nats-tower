@@ -14,10 +14,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { PlusIcon, Save } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
-import { getAccountById } from "@/services/accounts";
-import { getInstallationById } from "@/services/installations";
+import { useAccountById } from "@/services/accounts";
+import { useInstallationById } from "@/services/installations";
 import { getExportColumns } from "@/components/ui/exports/exports-columns";
-import { getAccountExports, upsertAccountExport } from "@/services/exports";
+import { useAccountExports, upsertAccountExport } from "@/services/exports";
 import {
 	Select,
 	SelectContent,
@@ -48,15 +48,15 @@ export const Route = createLazyFileRoute(
 const FormSchema = z.object({
 	name: z
 		.string({
-			required_error: "Please provide a name for the account.",
+			error: "Please provide a name for the account.",
 		})
 		.min(1, "Name is required"),
 	type: z.enum(["service", "stream"], {
-		required_error: "Please provide a type for the account.",
+		error: "Please provide a type for the account.",
 	}),
 	subject: z
 		.string({
-			required_error: "Please provide a subject for the account.",
+			error: "Please provide a subject for the account.",
 		})
 		.min(1, "Subject is required"),
 });
@@ -72,20 +72,20 @@ function Exports() {
 		data: installationData,
 		error: installationError,
 		isLoading: installationLoading,
-	} = getInstallationById(installationId);
+	} = useInstallationById(installationId);
 
 	const {
 		data: accountData,
 		error: accountError,
 		isLoading: accountLoading,
-	} = getAccountById(installationId, accountId);
+	} = useAccountById(installationId, accountId);
 
 	const {
 		data: exportData,
 		error: exportError,
 		isLoading: exportLoading,
 		mutate: mutateExports,
-	} = getAccountExports(installationId, accountId);
+	} = useAccountExports(installationId, accountId);
 
 	if (installationError || accountError || exportError)
 		return <div>failed to load</div>;

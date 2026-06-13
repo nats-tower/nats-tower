@@ -1,5 +1,15 @@
 import { pb } from "@/lib/pocketbase";
-import { toStringSigBytesPerKB } from "@/lib/utils";
+import { cn, toStringSigBytesPerKB } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+	AlertCircle,
+	Cpu,
+	Database,
+	type LucideIcon,
+	MemoryStick,
+	Network,
+	Server,
+} from "lucide-react";
 import useSWR from "swr";
 
 interface ServerStats {
@@ -79,6 +89,72 @@ function calculateTotalJetstreamStorage(serverInfos: ServerInfo[]): number {
 	return total;
 }
 
+function UtilizationBar({ percent }: { percent: number }) {
+	const clamped = Math.min(100, Math.max(0, percent));
+	const tone =
+		clamped >= 90
+			? "bg-destructive"
+			: clamped >= 75
+				? "bg-amber-500"
+				: "bg-primary";
+
+	return (
+		<div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+			<div
+				className={cn("h-full rounded-full transition-all", tone)}
+				style={{ width: `${clamped}%` }}
+			/>
+		</div>
+	);
+}
+
+interface StatCardProps {
+	icon: LucideIcon;
+	label: string;
+	isLoading: boolean;
+	hasError: boolean;
+	value: string | undefined;
+	percent?: number;
+}
+
+function StatCard({
+	icon: Icon,
+	label,
+	isLoading,
+	hasError,
+	value,
+	percent,
+}: StatCardProps) {
+	return (
+		<Card className="overflow-hidden">
+			<CardContent className="p-4">
+				<div className="flex items-center justify-between gap-2">
+					<span className="text-sm font-medium text-muted-foreground">
+						{label}
+					</span>
+					<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+						<Icon className="size-4" />
+					</span>
+				</div>
+				<div className="mt-2 text-2xl font-semibold tracking-tight">
+					{isLoading ? (
+						<span className="text-muted-foreground">Loading…</span>
+					) : hasError ? (
+						<span className="inline-flex items-center gap-1.5 text-base font-normal text-destructive">
+							<AlertCircle className="size-4" /> Error loading data
+						</span>
+					) : (
+						(value ?? "N/A")
+					)}
+				</div>
+				{!isLoading && !hasError && percent !== undefined ? (
+					<UtilizationBar percent={percent} />
+				) : null}
+			</CardContent>
+		</Card>
+	);
+}
+
 export interface ClusterInfoProps {
 	installationId: string;
 }
@@ -109,132 +185,142 @@ export function ClusterInfo({ installationId }: ClusterInfoProps) {
 
 	return (
 		<div>
-			<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-				<div className="col-span-1 sm:col-span-6 lg:col-span-3">
-					<div className="bg-white rounded-lg shadow">
-						<div className="p-4">
-							<div className="text-sm text-gray-500">Used Total Cores</div>
-							<div className="text-xl font-semibold">
-								{isClusterLoading
-									? "Loading..."
-									: clusterError
-										? "Error loading data"
-										: clusterData
-											? `${calculateTotalUsedCores(clusterData).toFixed(2)} / ${calculateTotalCores(clusterData)}`
-											: "N/A"}
-							</div>
-						</div>
-					</div>
-				</div>
-				<div className="col-span-1 sm:col-span-6 lg:col-span-3">
-					<div className="bg-white rounded-lg shadow">
-						<div className="p-4">
-							<div className="text-sm text-gray-500">Used Total Memory</div>
-							<div className="text-xl font-semibold">
-								{isClusterLoading
-									? "Loading..."
-									: clusterError
-										? "Error loading data"
-										: clusterData
-											? toStringSigBytesPerKB(
-													calculateTotalUsedBytes(clusterData),
-													2,
-													1024,
-												)
-											: "N/A"}
-							</div>
-						</div>
-					</div>
-				</div>
-				<div className="col-span-1 sm:col-span-6 lg:col-span-3">
-					<div className="bg-white rounded-lg shadow">
-						<div className="p-4">
-							<div className="text-sm text-gray-500">Total Connections</div>
-							<div className="text-xl font-semibold">
-								{isClusterLoading
-									? "Loading..."
-									: clusterError
-										? "Error loading data"
-										: clusterData
-											? `${calculateTotalConnections(clusterData)}`
-											: "N/A"}
-							</div>
-						</div>
-					</div>
-				</div>
-				<div className="col-span-1 sm:col-span-6 lg:col-span-3">
-					<div className="bg-white rounded-lg shadow">
-						<div className="p-4">
-							<div className="text-sm text-gray-500">
-								Used Total Jetstream Storage
-							</div>
-							<div className="text-xl font-semibold">
-								{isClusterLoading
-									? "Loading..."
-									: clusterError
-										? "Error loading data"
-										: clusterData
-											? `${toStringSigBytesPerKB(calculateTotalUsedJetstreamStorage(clusterData), 2, 1024)} / ${toStringSigBytesPerKB(calculateTotalJetstreamStorage(clusterData), 2, 1024)}`
-											: "N/A"}
-							</div>
-						</div>
-					</div>
-				</div>
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<StatCard
+					icon={Cpu}
+					label="Used Total Cores"
+					isLoading={isClusterLoading}
+					hasError={!!clusterError}
+					value={
+						clusterData
+							? `${calculateTotalUsedCores(clusterData).toFixed(2)} / ${calculateTotalCores(clusterData)}`
+							: undefined
+					}
+					percent={
+						clusterData && calculateTotalCores(clusterData) > 0
+							? (calculateTotalUsedCores(clusterData) /
+									calculateTotalCores(clusterData)) *
+								100
+							: undefined
+					}
+				/>
+				<StatCard
+					icon={MemoryStick}
+					label="Used Total Memory"
+					isLoading={isClusterLoading}
+					hasError={!!clusterError}
+					value={
+						clusterData
+							? toStringSigBytesPerKB(
+									calculateTotalUsedBytes(clusterData),
+									2,
+									1024,
+								)
+							: undefined
+					}
+				/>
+				<StatCard
+					icon={Network}
+					label="Total Connections"
+					isLoading={isClusterLoading}
+					hasError={!!clusterError}
+					value={
+						clusterData
+							? `${calculateTotalConnections(clusterData)}`
+							: undefined
+					}
+				/>
+				<StatCard
+					icon={Database}
+					label="Used Jetstream Storage"
+					isLoading={isClusterLoading}
+					hasError={!!clusterError}
+					value={
+						clusterData
+							? `${toStringSigBytesPerKB(calculateTotalUsedJetstreamStorage(clusterData), 2, 1024)} / ${toStringSigBytesPerKB(calculateTotalJetstreamStorage(clusterData), 2, 1024)}`
+							: undefined
+					}
+					percent={
+						clusterData && calculateTotalJetstreamStorage(clusterData) > 0
+							? (calculateTotalUsedJetstreamStorage(clusterData) /
+									calculateTotalJetstreamStorage(clusterData)) *
+								100
+							: undefined
+					}
+				/>
 			</div>
-			<div className="text-sm text-gray-500 mt-6">Servers</div>
-			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+			<div className="mb-2 mt-8 text-sm font-medium text-muted-foreground">
+				Servers
+			</div>
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				{isClusterLoading ? (
-					<div className="col-span-4 p-4">Loading server information...</div>
+					<div className="col-span-full p-4 text-sm text-muted-foreground">
+						Loading server information…
+					</div>
 				) : clusterError ? (
-					<div className="col-span-4 p-4">Error loading server data</div>
+					<div className="col-span-full inline-flex items-center gap-2 p-4 text-sm text-destructive">
+						<AlertCircle className="size-4" /> Error loading server data
+					</div>
 				) : clusterData && clusterData.length > 0 ? (
 					clusterData.map((server) => (
-						<div className="col-span-1" key={server.server.id}>
-							<div className="bg-white rounded-lg shadow">
-								<div className="px-4 py-3 border-b">
-									<h3 className="text-lg font-medium truncate">
-										{server.server.name}
-									</h3>
-								</div>
-								<div className="p-4">
-									<div className="grid grid-cols-1 gap-3">
-										<div className="flex justify-between">
-											<div className="text-sm text-gray-500">Used Cores</div>
-											<div className="font-medium">
-												{`${server.statsz.cpu.toFixed(2)} / ${server.statsz.cores}`}
-											</div>
-										</div>
-										<div className="flex justify-between">
-											<div className="text-sm text-gray-500">Memory</div>
-											<div className="font-medium">
-												{toStringSigBytesPerKB(
-													Number(server.statsz.mem),
-													2,
-													1024,
-												)}
-											</div>
-										</div>
-										<div className="flex justify-between">
-											<div className="text-sm text-gray-500">Connections</div>
-											<div className="font-medium">
-												{server.statsz.connections}
-											</div>
-										</div>
-										<div className="flex justify-between">
-											<div className="text-sm text-gray-500">
-												Jetstream Storage
-											</div>
-											<div className="font-medium">
-												{ server.statsz.jetstream ? `${toStringSigBytesPerKB(server.statsz.jetstream.stats.storage, 2, 1024)} / ${toStringSigBytesPerKB(server.statsz.jetstream.config.max_storage, 2, 1024)}` : "N/A" }
-											</div>
-										</div>
-									</div>
-								</div>
+						<Card
+							key={server.server.id}
+							className="overflow-hidden transition-shadow hover:shadow-md"
+						>
+							<div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-3">
+								<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+									<Server className="size-4" />
+								</span>
+								<h3 className="truncate text-base font-semibold">
+									{server.server.name}
+								</h3>
 							</div>
-						</div>
+							<CardContent className="p-4">
+								<dl className="grid grid-cols-1 gap-3">
+									<div className="flex items-center justify-between gap-2">
+										<dt className="text-sm text-muted-foreground">
+											Used Cores
+										</dt>
+										<dd className="font-medium tabular-nums">
+											{`${server.statsz.cpu.toFixed(2)} / ${server.statsz.cores}`}
+										</dd>
+									</div>
+									<div className="flex items-center justify-between gap-2">
+										<dt className="text-sm text-muted-foreground">Memory</dt>
+										<dd className="font-medium tabular-nums">
+											{toStringSigBytesPerKB(
+												Number(server.statsz.mem),
+												2,
+												1024,
+											)}
+										</dd>
+									</div>
+									<div className="flex items-center justify-between gap-2">
+										<dt className="text-sm text-muted-foreground">
+											Connections
+										</dt>
+										<dd className="font-medium tabular-nums">
+											{server.statsz.connections}
+										</dd>
+									</div>
+									<div className="flex items-center justify-between gap-2">
+										<dt className="text-sm text-muted-foreground">
+											Jetstream Storage
+										</dt>
+										<dd className="font-medium tabular-nums">
+											{server.statsz.jetstream
+												? `${toStringSigBytesPerKB(server.statsz.jetstream.stats.storage, 2, 1024)} / ${toStringSigBytesPerKB(server.statsz.jetstream.config.max_storage, 2, 1024)}`
+												: "N/A"}
+										</dd>
+									</div>
+								</dl>
+							</CardContent>
+						</Card>
 					))
 				) : (
-					<div className="col-span-4 p-4">No server information available</div>
+					<div className="col-span-full p-4 text-sm text-muted-foreground">
+						No server information available
+					</div>
 				)}
 			</div>
 		</div>

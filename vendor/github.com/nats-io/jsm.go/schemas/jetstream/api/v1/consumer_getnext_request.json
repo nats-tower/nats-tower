@@ -8,9 +8,9 @@
     "expires": {
       "description": "A duration from now when the pull should expire, stated in nanoseconds, 0 for no expiry",
       "$comment": "nanoseconds depicting a duration in time, signed 64 bit integer",
-      "minimum": 0,
       "type": "integer",
-      "maximum": 9223372036854775807
+      "maximum": 9223372036854775807,
+      "minimum": -9223372036854775807
     },
     "batch": {
       "description": "How many messages the server should deliver to the requestor",
@@ -33,37 +33,9 @@
     "idle_heartbeat": {
       "description": "When not 0 idle heartbeats will be sent on this interval",
       "$comment": "nanoseconds depicting a duration in time, signed 64 bit integer",
-      "minimum": 0,
       "type": "integer",
-      "maximum": 9223372036854775807
-    },
-    "group": {
-      "type": "string",
-      "description": "The consumer group to pull from"
-    },
-    "min_pending": {
-      "description": "The minimum number of messages the server should have in the consumer's pending queue before serving this pull",
-      "minimum": 0,
-      "$comment": "signed 64 bit integer",
-      "type": "integer",
-      "maximum": 9223372036854775807
-    },
-    "min_ack_pending": {
-      "description": "The minimum number of messages the server should have in the consumer's ack pending queue before serving this pull",
-      "minimum": 0,
-      "$comment": "signed 64 bit integer",
-      "type": "integer",
-      "maximum": 9223372036854775807
-    },
-    "id": {
-      "type": "string",
-      "description": "When pulling from a Pinned Client consumer this is the unique client ID"
-    },
-    "priority": {
-      "type": "integer",
-      "description": "The priority of the pull request",
-      "minimum": 0,
-      "maximum": 9
+      "maximum": 9223372036854775807,
+      "minimum": -9223372036854775807
     }
   }
 }

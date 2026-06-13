@@ -144,7 +144,7 @@ func (app *BaseApp) SyncRecordTableSchema(newCollection *Collection, oldCollecti
 
 	// run optimize per the SQLite recommendations
 	// (https://www.sqlite.org/pragma.html#pragma_optimize)
-	_, optimizeErr := app.ConcurrentDB().NewQuery("PRAGMA optimize").Execute()
+	_, optimizeErr := app.NonconcurrentDB().NewQuery("PRAGMA optimize").Execute()
 	if optimizeErr != nil {
 		app.Logger().Warn("Failed to run PRAGMA optimize after record table sync", slog.String("error", optimizeErr.Error()))
 	}
@@ -306,8 +306,10 @@ func dropCollectionIndexes(app App, collection *Collection) error {
 		for _, raw := range collection.Indexes {
 			parsed := dbutils.ParseIndex(raw)
 
-			if !parsed.IsValid() {
-				continue
+			// note: don't check IsValid because the index table name may not be populated
+			// (https://github.com/pocketbase/pocketbase/issues/7689)
+			if parsed.IndexName == "" {
+				return fmt.Errorf("failed to dop index - missing index name: %s", raw)
 			}
 
 			_, err := txApp.DB().NewQuery(fmt.Sprintf("DROP INDEX IF EXISTS [[%s]]", parsed.IndexName)).Execute()

@@ -170,9 +170,15 @@ func generateAccountRecord(_ context.Context,
 	return record, nil
 }
 
-func generateUserRecord(_ context.Context,
+func generateUserRecord(ctx context.Context,
 	record *core.Record,
 	accountID, accountPubKey, accountSigningSeed string, name string) (*core.Record, error) {
+	return generateUserRecordWithPermissions(ctx, record, accountID, accountPubKey, accountSigningSeed, name, nil, false)
+}
+
+func generateUserRecordWithPermissions(_ context.Context,
+	record *core.Record,
+	accountID, accountPubKey, accountSigningSeed string, name string, permissions *jwt.Permissions, scoped bool) (*core.Record, error) {
 	// create user
 	userKP, err := nkeys.CreateUser()
 	if err != nil {
@@ -197,8 +203,11 @@ func generateUserRecord(_ context.Context,
 	userClaims.Name = name
 	userClaims.IssuerAccount = accountPubKey
 
-	// TODO move limits to separate collection
-	// TODO move permissions to separate collection
+	if scoped {
+		userClaims.SetScoped(true)
+	} else if permissions != nil {
+		userClaims.Permissions = *permissions
+	}
 
 	accountKP, err := nkeys.FromSeed([]byte(accountSigningSeed))
 	if err != nil {
@@ -221,5 +230,36 @@ func generateUserRecord(_ context.Context,
 	record.Set("seed", string(seed))
 	record.Set("jwt", jwtValue)
 	record.Set("creds", creds)
+	return record, nil
+}
+
+func generateSigningKeyRecord(_ context.Context,
+	record *core.Record,
+	accountID string) (*core.Record, error) {
+	// create signing key (account scope)
+	signingKP, err := nkeys.CreateAccount()
+	if err != nil {
+		return nil, err
+	}
+
+	pubKey, err := signingKP.PublicKey()
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := signingKP.PrivateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	seed, err := signingKP.Seed()
+	if err != nil {
+		return nil, err
+	}
+
+	record.Set("account", accountID)
+	record.Set("public_key", pubKey)
+	record.Set("private_key", string(privateKey))
+	record.Set("seed", string(seed))
 	return record, nil
 }

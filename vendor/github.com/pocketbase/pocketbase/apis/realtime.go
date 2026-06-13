@@ -28,6 +28,9 @@ const clientsChunkSize = 150
 // RealtimeClientAuthKey is the name of the realtime client store key that holds its auth state.
 const RealtimeClientAuthKey = "auth"
 
+// RealtimeClientIPKey is the name of the realtime client store key that holds the IP of the connected client.
+const RealtimeClientIPKey = "pbRealtimeClientIP"
+
 // bindRealtimeApi registers the realtime api endpoints.
 func bindRealtimeApi(app core.App, rg *router.RouterGroup[*core.RequestEvent]) {
 	sub := rg.Group("/realtime")
@@ -63,8 +66,12 @@ func realtimeConnect(e *core.RequestEvent) error {
 
 	connectEvent := new(core.RealtimeConnectRequestEvent)
 	connectEvent.RequestEvent = e
-	connectEvent.Client = subscriptions.NewDefaultClient()
 	connectEvent.IdleTimeout = 5 * time.Minute
+	connectEvent.MaxTimeout = 30 * time.Minute
+	connectEvent.Client = subscriptions.NewDefaultClient()
+
+	// could be used as an optional cross-reference check in other API endpoints
+	connectEvent.Client.Set(RealtimeClientIPKey, e.RealIP())
 
 	return e.App.OnRealtimeConnectRequest().Trigger(connectEvent, func(ce *core.RealtimeConnectRequestEvent) error {
 		// register new subscription client
@@ -73,7 +80,7 @@ func realtimeConnect(e *core.RequestEvent) error {
 			e.App.SubscriptionsBroker().Unregister(ce.Client.Id())
 		}()
 
-		ce.App.Logger().Debug("Realtime connection established.", slog.String("clientId", ce.Client.Id()))
+		ce.App.Logger().Debug("Realtime connection established", slog.String("clientId", ce.Client.Id()))
 
 		// signalize established connection (aka. fire "connect" message)
 		connectMsgEvent := new(core.RealtimeMessageEvent)
@@ -99,12 +106,19 @@ func realtimeConnect(e *core.RequestEvent) error {
 			return nil
 		}
 
+		// start a max lifetime timer to prevent accumulating too much
+		// connection resources and to allow the GC to run more regularly
+		maxTimer := time.NewTimer(ce.MaxTimeout)
+		defer maxTimer.Stop()
+
 		// start an idle timer to keep track of inactive/forgotten connections
 		idleTimer := time.NewTimer(ce.IdleTimeout)
 		defer idleTimer.Stop()
 
 		for {
 			select {
+			case <-maxTimer.C:
+				cancelRequest()
 			case <-idleTimer.C:
 				cancelRequest()
 			case msg, ok := <-ce.Client.Channel():
@@ -186,6 +200,21 @@ func realtimeSetSubscriptions(e *core.RequestEvent) error {
 		return e.NotFoundError("Missing or invalid client id.", err)
 	}
 
+	// for just in case to prevent someone changing a guest subscription
+	//
+	// note1: this is an extra precaution against clientId bruteforce attempts
+	// for installations allowing longer realtime connections duration
+	//
+	// note2: custom registered clients (aka. those without IP in the store)
+	// are excluded from the check for backward compatibility
+	clientIP, _ := client.Get(RealtimeClientIPKey).(string)
+	if clientIP != "" && clientIP != e.RealIP() {
+		return e.BadRequestError(
+			"Invalid realtime client.",
+			errors.New("the subscription request IP doesn't match with the realtime client IP"),
+		)
+	}
+
 	// for now allow only guest->auth upgrades and any other auth change is forbidden
 	clientAuth, _ := client.Get(RealtimeClientAuthKey).(*core.Record)
 	if clientAuth != nil && !isSameAuth(clientAuth, e.Auth) {
@@ -208,7 +237,7 @@ func realtimeSetSubscriptions(e *core.RequestEvent) error {
 		e.Client.Subscribe(e.Subscriptions...)
 
 		e.App.Logger().Debug(
-			"Realtime subscriptions updated.",
+			"Realtime subscriptions updated",
 			slog.String("clientId", e.Client.Id()),
 			slog.Any("subscriptions", e.Subscriptions),
 		)
@@ -219,8 +248,13 @@ func realtimeSetSubscriptions(e *core.RequestEvent) error {
 	})
 }
 
-// updateClientsAuth updates the existing clients auth record with the new one (matched by ID).
-func realtimeUpdateClientsAuth(app core.App, newAuthRecord *core.Record) error {
+// realtimeUpdateClientsAuth updates the auth state of all clients related to the provided authRecord.
+//
+// Realtime connections has short lifetime by design, but to minimize abuse
+// if the new record has a different tokenKey (e.g. in case of password reset)
+// the auth state of the related realtime connections is also cleared
+// (aka. they remain active but unauthenticated, allowing to reauthenicate with the next subscription).
+func realtimeUpdateClientsAuth(app core.App, authRecord *core.Record) error {
 	chunks := app.SubscriptionsBroker().ChunkedClients(clientsChunkSize)
 
 	group := new(errgroup.Group)
@@ -230,9 +264,13 @@ func realtimeUpdateClientsAuth(app core.App, newAuthRecord *core.Record) error {
 			for _, client := range chunk {
 				clientAuth, _ := client.Get(RealtimeClientAuthKey).(*core.Record)
 				if clientAuth != nil &&
-					clientAuth.Id == newAuthRecord.Id &&
-					clientAuth.Collection().Name == newAuthRecord.Collection().Name {
-					client.Set(RealtimeClientAuthKey, newAuthRecord)
+					clientAuth.Id == authRecord.Id &&
+					clientAuth.Collection().Name == authRecord.Collection().Name {
+					if clientAuth.TokenKey() != authRecord.TokenKey() {
+						client.Unset(RealtimeClientAuthKey)
+					} else {
+						client.Set(RealtimeClientAuthKey, authRecord)
+					}
 				}
 			}
 
@@ -243,8 +281,8 @@ func realtimeUpdateClientsAuth(app core.App, newAuthRecord *core.Record) error {
 	return group.Wait()
 }
 
-// realtimeUnsetClientsAuthState unsets the auth state of all clients that have the provided auth model.
-func realtimeUnsetClientsAuthState(app core.App, authModel core.Model) error {
+// realtimeUnsetClientsAuthByRecordModelOrProxy unsets the auth state of all clients that have the provided auth model.
+func realtimeUnsetClientsAuthByRecordModelOrProxy(app core.App, authModel core.Model) error {
 	chunks := app.SubscriptionsBroker().ChunkedClients(clientsChunkSize)
 
 	group := new(errgroup.Group)
@@ -267,7 +305,76 @@ func realtimeUnsetClientsAuthState(app core.App, authModel core.Model) error {
 	return group.Wait()
 }
 
+// realtimeUnsetClientsAuthByCollection unsets the auth state of all authenticated clients related to the collection.
+func realtimeUnsetClientsAuthByCollection(app core.App, collection *core.Collection) error {
+	chunks := app.SubscriptionsBroker().ChunkedClients(clientsChunkSize)
+
+	group := new(errgroup.Group)
+
+	for _, chunk := range chunks {
+		group.Go(func() error {
+			for _, client := range chunk {
+				clientAuth, _ := client.Get(RealtimeClientAuthKey).(*core.Record)
+				if clientAuth != nil && clientAuth.Collection().Name == collection.Name {
+					client.Unset(RealtimeClientAuthKey)
+				}
+			}
+
+			return nil
+		})
+	}
+
+	return group.Wait()
+}
+
 func bindRealtimeEvents(app core.App) {
+	// reset the clients auth on collection secret change
+	// (@todo with the future tracking of old collections data consider replacing with *AfterUpdateSuccess to account for transaction rollback)
+	app.OnCollectionUpdate().Bind(&hook.Handler[*core.CollectionEvent]{
+		Func: func(e *core.CollectionEvent) error {
+			if !e.Collection.IsAuth() {
+				return e.Next()
+			}
+
+			cached, _ := e.App.FindCachedCollectionByNameOrId(e.Collection.Id)
+
+			if err := e.Next(); err != nil {
+				return err
+			}
+
+			if cached != nil && cached.AuthToken.Secret != e.Collection.AuthToken.Secret {
+				if err := realtimeUnsetClientsAuthByCollection(e.App, e.Collection); err != nil {
+					app.Logger().Warn(
+						"Failed to remove client(s) associated to the changed auth collection",
+						slog.String("collectionName", e.Collection.Name),
+						slog.String("error", err.Error()),
+					)
+				}
+			}
+
+			return nil
+		},
+		Priority: -99,
+	})
+
+	// unset the clients auth on auth collection delete
+	app.OnCollectionAfterDeleteSuccess().Bind(&hook.Handler[*core.CollectionEvent]{
+		Func: func(e *core.CollectionEvent) error {
+			if e.Collection.IsAuth() {
+				if err := realtimeUnsetClientsAuthByCollection(e.App, e.Collection); err != nil {
+					app.Logger().Warn(
+						"Failed to remove client(s) associated to the deleted auth collection",
+						slog.String("collectionName", e.Collection.Name),
+						slog.String("error", err.Error()),
+					)
+				}
+			}
+
+			return e.Next()
+		},
+		Priority: -99,
+	})
+
 	// update the clients that has auth record association
 	app.OnModelAfterUpdateSuccess().Bind(&hook.Handler[*core.ModelEvent]{
 		Func: func(e *core.ModelEvent) error {
@@ -294,7 +401,7 @@ func bindRealtimeEvents(app core.App) {
 		Func: func(e *core.ModelEvent) error {
 			collection := realtimeResolveRecordCollection(e.App, e.Model)
 			if collection != nil && collection.IsAuth() {
-				if err := realtimeUnsetClientsAuthState(e.App, e.Model); err != nil {
+				if err := realtimeUnsetClientsAuthByRecordModelOrProxy(e.App, e.Model); err != nil {
 					app.Logger().Warn(
 						"Failed to remove client(s) associated to the deleted auth model",
 						slog.Any("id", e.Model.PK()),
@@ -548,6 +655,20 @@ func realtimeBroadcastRecord(app core.App, action string, record *core.Record, d
 						// which exact fields the client subscription requested or has permissions to access
 						cleanRecord := record.Fresh()
 
+						// -------------------------------------------
+						// @todo consider with the refactoring whether
+						// the default enriching used by the regular APIs
+						// can be reused here too to avoid eventual future
+						// discrepencies in the record event data
+						//
+						// https://github.com/pocketbase/pocketbase/issues/7721
+						// -------------------------------------------
+
+						// enable hidden fields for superuser subscribers
+						if requestInfo.HasSuperuserAuth() {
+							cleanRecord.Unhide(collection.Fields.FieldNames()...)
+						}
+
 						// trigger the enrich hooks
 						enrichErr := triggerRecordEnrichHooks(app, requestInfo, []*core.Record{cleanRecord}, func() error {
 							// apply expand
@@ -769,7 +890,11 @@ func realtimeCanAccessRecord(
 	}
 
 	q.AndWhere(expr)
-	resolver.UpdateQuery(q)
+
+	err = resolver.UpdateQuery(q)
+	if err != nil {
+		return false
+	}
 
 	err = q.Limit(1).Row(&exists)
 

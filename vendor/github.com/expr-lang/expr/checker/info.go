@@ -8,18 +8,22 @@ import (
 	"github.com/expr-lang/expr/vm"
 )
 
-func FieldIndex(c *Cache, env Nature, node ast.Node) (bool, []int, string) {
+func FieldIndex(env Nature, node ast.Node) (bool, []int, string) {
 	switch n := node.(type) {
 	case *ast.IdentifierNode:
-		if idx, ok := env.FieldIndex(c, n.Value); ok {
-			return true, idx, n.Value
+		if env.Kind() == reflect.Struct {
+			if field, ok := env.Get(n.Value); ok && len(field.FieldIndex) > 0 {
+				return true, field.FieldIndex, n.Value
+			}
 		}
 	case *ast.MemberNode:
-		base := n.Node.Nature().Deref(c)
-		if base.Kind == reflect.Struct {
+		base := n.Node.Nature()
+		base = base.Deref()
+		if base.Kind() == reflect.Struct {
 			if prop, ok := n.Property.(*ast.StringNode); ok {
-				if idx, ok := base.FieldIndex(c, prop.Value); ok {
-					return true, idx, prop.Value
+				name := prop.Value
+				if field, ok := base.FieldByName(name); ok {
+					return true, field.FieldIndex, name
 				}
 			}
 		}
@@ -27,11 +31,11 @@ func FieldIndex(c *Cache, env Nature, node ast.Node) (bool, []int, string) {
 	return false, nil, ""
 }
 
-func MethodIndex(c *Cache, env Nature, node ast.Node) (bool, int, string) {
+func MethodIndex(env Nature, node ast.Node) (bool, int, string) {
 	switch n := node.(type) {
 	case *ast.IdentifierNode:
-		if env.Kind == reflect.Struct {
-			if m, ok := env.Get(c, n.Value); ok && m.TypeData != nil {
+		if env.Kind() == reflect.Struct {
+			if m, ok := env.Get(n.Value); ok {
 				return m.Method, m.MethodIndex, n.Value
 			}
 		}
@@ -117,7 +121,7 @@ func IsFastFunc(fn reflect.Type, method bool) bool {
 		fn.NumOut() == 1 &&
 		fn.Out(0).Kind() == reflect.Interface {
 		rest := fn.In(fn.NumIn() - 1) // function has only one param for functions and two for methods
-		if rest != nil && rest.Kind() == reflect.Slice && rest.Elem().Kind() == reflect.Interface {
+		if kind(rest) == reflect.Slice && rest.Elem().Kind() == reflect.Interface {
 			return true
 		}
 	}

@@ -16,7 +16,6 @@ package server
 import (
 	"bytes"
 	"errors"
-	"iter"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -358,6 +357,16 @@ func (s *Sublist) chkForRemoveNotification(subject, queue string) {
 func (s *Sublist) Insert(sub *subscription) error {
 	// copy the subject since we hold this and this might be part of a large byte slice.
 	subject := string(sub.subject)
+	tsa := [32]string{}
+	tokens := tsa[:0]
+	start := 0
+	for i := 0; i < len(subject); i++ {
+		if subject[i] == btsep {
+			tokens = append(tokens, subject[start:i])
+			start = i + 1
+		}
+	}
+	tokens = append(tokens, subject[start:])
 
 	s.Lock()
 
@@ -365,7 +374,7 @@ func (s *Sublist) Insert(sub *subscription) error {
 	var n *node
 	l := s.root
 
-	for t := range strings.SplitSeq(subject, tsep) {
+	for _, t := range tokens {
 		lt := len(t)
 		if lt == 0 || sfwc {
 			s.Unlock()
@@ -842,6 +851,16 @@ type lnt struct {
 // Raw low level remove, can do batches with lock held outside.
 func (s *Sublist) remove(sub *subscription, shouldLock bool, doCacheUpdates bool) error {
 	subject := string(sub.subject)
+	tsa := [32]string{}
+	tokens := tsa[:0]
+	start := 0
+	for i := 0; i < len(subject); i++ {
+		if subject[i] == btsep {
+			tokens = append(tokens, subject[start:i])
+			start = i + 1
+		}
+	}
+	tokens = append(tokens, subject[start:])
 
 	if shouldLock {
 		s.Lock()
@@ -856,7 +875,7 @@ func (s *Sublist) remove(sub *subscription, shouldLock bool, doCacheUpdates bool
 	var lnts [32]lnt
 	levels := lnts[:0]
 
-	for t := range strings.SplitSeq(subject, tsep) {
+	for _, t := range tokens {
 		lt := len(t)
 		if lt == 0 || sfwc {
 			return ErrInvalidSubject
@@ -976,9 +995,6 @@ func (n *node) isEmpty() bool {
 
 // Return the number of nodes for the given level.
 func (l *level) numNodes() int {
-	if l == nil {
-		return 0
-	}
 	num := len(l.nodes)
 	if l.pwc != nil {
 		num++
@@ -1211,7 +1227,8 @@ func isValidSubject(subject string, checkRunes bool) bool {
 		}
 	}
 	sfwc := false
-	for t := range strings.SplitSeq(subject, tsep) {
+	tokens := strings.Split(subject, tsep)
+	for _, t := range tokens {
 		length := len(t)
 		if length == 0 || sfwc {
 			return false
@@ -1234,12 +1251,12 @@ func isValidSubject(subject string, checkRunes bool) bool {
 
 // IsValidLiteralSubject returns true if a subject is valid and literal (no wildcards), false otherwise
 func IsValidLiteralSubject(subject string) bool {
-	return isValidLiteralSubject(strings.SplitSeq(subject, tsep))
+	return isValidLiteralSubject(strings.Split(subject, tsep))
 }
 
 // isValidLiteralSubject returns true if the tokens are valid and literal (no wildcards), false otherwise
-func isValidLiteralSubject(tokens iter.Seq[string]) bool {
-	for t := range tokens {
+func isValidLiteralSubject(tokens []string) bool {
+	for _, t := range tokens {
 		if len(t) == 0 {
 			return false
 		}
@@ -1259,8 +1276,9 @@ func ValidateMapping(src string, dest string) error {
 	if dest == _EMPTY_ {
 		return nil
 	}
+	subjectTokens := strings.Split(dest, tsep)
 	sfwc := false
-	for t := range strings.SplitSeq(dest, tsep) {
+	for _, t := range subjectTokens {
 		length := len(t)
 		if length == 0 || sfwc {
 			return &mappingDestinationErr{t, ErrInvalidMappingDestinationSubject}
@@ -1274,8 +1292,7 @@ func ValidateMapping(src string, dest string) error {
 				!splitFromRightMappingFunctionRegEx.MatchString(t) &&
 				!sliceFromLeftMappingFunctionRegEx.MatchString(t) &&
 				!sliceFromRightMappingFunctionRegEx.MatchString(t) &&
-				!splitMappingFunctionRegEx.MatchString(t) &&
-				!randomMappingFunctionRegEx.MatchString(t) {
+				!splitMappingFunctionRegEx.MatchString(t) {
 				return &mappingDestinationErr{t, ErrUnknownMappingDestinationFunction}
 			} else {
 				continue
@@ -1414,12 +1431,6 @@ func tokenizeSubjectIntoSlice(tts []string, subject string) []string {
 	}
 	tts = append(tts, subject[start:])
 	return tts
-}
-
-// SubjectMatchesFilter returns true if the subject matches the provided
-// filter or false otherwise.
-func SubjectMatchesFilter(subject, filter string) bool {
-	return subjectIsSubsetMatch(subject, filter)
 }
 
 // Calls into the function isSubsetMatch()
@@ -1740,49 +1751,39 @@ func intersectStree[T any](st *stree.SubjectTree[T], r *level, subj []byte, cb f
 	if len(nsubj) > 0 {
 		nsubj = append(subj, '.')
 	}
-	if r.fwc != nil {
+	switch {
+	case r.fwc != nil:
 		// We've reached a full wildcard, do a FWC match on the stree at this point
 		// and don't keep iterating downward.
 		nsubj := append(nsubj, '>')
 		st.Match(nsubj, cb)
-		return
-	}
-	if r.pwc != nil {
+	case r.pwc != nil:
 		// We've found a partial wildcard. We'll keep iterating downwards, but first
 		// check whether there's interest at this level (without triggering dupes) and
 		// match if so.
-		var done bool
 		nsubj := append(nsubj, '*')
 		if len(r.pwc.psubs)+len(r.pwc.qsubs) > 0 {
 			st.Match(nsubj, cb)
-			done = true
 		}
-		if r.pwc.next.numNodes() > 0 {
+		if r.pwc.next != nil && r.pwc.next.numNodes() > 0 {
 			intersectStree(st, r.pwc.next, nsubj, cb)
 		}
-		if done {
-			return
-		}
-	}
-	// Normal node with subject literals, keep iterating.
-	for t, n := range r.nodes {
-		if r.pwc != nil && r.pwc.next.numNodes() > 0 && n.next.numNodes() > 0 {
-			// A wildcard at the next level will already visit these descendents
-			// so skip so we don't callback the same subject more than once.
-			continue
-		}
-		nsubj := append(nsubj, t...)
-		if len(n.psubs)+len(n.qsubs) > 0 {
-			if subjectHasWildcard(bytesToString(nsubj)) {
-				st.Match(nsubj, cb)
-			} else {
-				if e, ok := st.Find(nsubj); ok {
-					cb(nsubj, e)
+	default:
+		// Normal node with subject literals, keep iterating.
+		for t, n := range r.nodes {
+			nsubj := append(nsubj, t...)
+			if len(n.psubs)+len(n.qsubs) > 0 {
+				if subjectHasWildcard(bytesToString(nsubj)) {
+					st.Match(nsubj, cb)
+				} else {
+					if e, ok := st.Find(nsubj); ok {
+						cb(nsubj, e)
+					}
 				}
 			}
-		}
-		if n.next.numNodes() > 0 {
-			intersectStree(st, n.next, nsubj, cb)
+			if n.next != nil && n.next.numNodes() > 0 {
+				intersectStree(st, n.next, nsubj, cb)
+			}
 		}
 	}
 }

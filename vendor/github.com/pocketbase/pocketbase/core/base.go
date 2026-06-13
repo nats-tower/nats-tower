@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/fatih/color"
@@ -39,8 +38,12 @@ const (
 
 	LocalStorageDirName       string = "storage"
 	LocalBackupsDirName       string = "backups"
-	LocalTempDirName          string = ".pb_temp_to_delete" // temp pb_data sub directory that will be deleted on each app.Bootstrap()
 	LocalAutocertCacheDirName string = ".autocert_cache"
+	LocalNotifyDirName        string = ".notify"            // optional watched directory that is used as a cross-platform workaround for synchronizing various runtime states between multiple PocketBase instances pointing to the same pb_data
+	LocalTempDirName          string = ".pb_temp_to_delete" // temp pb_data sub directory that will be deleted on each app.Bootstrap()
+
+	// @todo consider removing after backups refactoring
+	lostFoundDirName string = "lost+found"
 )
 
 // FilesManager defines an interface with common methods that files manager models should implement.
@@ -773,7 +776,7 @@ func (app *BaseApp) Restart() error {
 			}
 		}()
 
-		return syscall.Exec(execPath, os.Args, os.Environ())
+		return execve(execPath, os.Args, os.Environ())
 	})
 }
 
@@ -1218,7 +1221,7 @@ var sqlLogReplacements = []struct {
 	{regexp.MustCompile(`<nil>`), "NULL"},
 }
 
-// normalizeSQLLog replaces common query builder charactes with their plain SQL version for easier debugging.
+// normalizeSQLLog replaces common query builder characters with their plain SQL version for easier debugging.
 // The query is still not suitable for execution and should be used only for log and debug purposes
 // (the normalization is done here to avoid breaking changes in dbx).
 func normalizeSQLLog(sql string) string {
@@ -1365,7 +1368,7 @@ func (app *BaseApp) registerBaseHooks() {
 			app.Logger().Warn("Failed to run periodic PRAGMA wal_checkpoint for the auxiliary DB", slog.String("error", execErr.Error()))
 		}
 
-		_, execErr = app.ConcurrentDB().NewQuery("PRAGMA optimize").Execute()
+		_, execErr = app.NonconcurrentDB().NewQuery("PRAGMA optimize").Execute()
 		if execErr != nil {
 			app.Logger().Warn("Failed to run periodic PRAGMA optimize", slog.String("error", execErr.Error()))
 		}
@@ -1380,6 +1383,7 @@ func (app *BaseApp) registerBaseHooks() {
 	app.registerMFAHooks()
 	app.registerOTPHooks()
 	app.registerAuthOriginHooks()
+	app.registerNotifyWatcherHooks()
 }
 
 // getLoggerMinLevel returns the logger min level based on the
@@ -1406,7 +1410,7 @@ func getLoggerMinLevel(app App) slog.Level {
 func (app *BaseApp) initLogger() error {
 	duration := 3 * time.Second
 	ticker := time.NewTicker(duration)
-	done := make(chan bool)
+	done := make(chan bool, 1)
 
 	handler := logger.NewBatchHandler(logger.BatchOptions{
 		Level:     getLoggerMinLevel(app),
@@ -1477,7 +1481,11 @@ func (app *BaseApp) initLogger() error {
 
 			ticker.Stop()
 
-			done <- true
+			// don't block in case OnTerminate is triggered more than once
+			select {
+			case done <- true:
+			default:
+			}
 
 			return e.Next()
 		},

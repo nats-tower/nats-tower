@@ -25,7 +25,7 @@ export function toStringSigBytesPerKB(
 	bytesPerKB: number,
 ): string {
 	let f = n;
-	let i = 0;
+	let i;
 
 	for (i = 0; i < scaleStrings.length; i++) {
 		if (f < bytesPerKB) {

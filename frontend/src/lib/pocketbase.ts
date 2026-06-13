@@ -13,13 +13,25 @@ const baseUrl = import.meta.env.PROD ? "/" : "http://localhost:8099/";
 
 export const pb = new PocketBase(baseUrl) as TypedPocketBase;
 
+// Disable PocketBase's automatic request auto-cancellation. SWR already handles
+// request deduplication and caching, and multiple hooks (e.g. the page data and
+// the breadcrumb lookup) can legitimately request the same record concurrently.
+// With auto-cancellation enabled those requests share an auto-generated request
+// key, so one gets aborted on tab refocus revalidation and surfaces as a
+// spurious "Error loading ..." state.
+pb.autoCancellation(false);
+
 interface FieldError {
 	code: string;
 	message: string;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: generic error catch
-pb.afterSend = (response: Response, data: any) => {
+interface ErrorResponseData {
+	message?: string;
+	data?: Record<string, FieldError>;
+}
+
+pb.afterSend = (response: Response, data: ErrorResponseData) => {
 	if (response.status !== 200 && response.status !== 204) {
 		// Example data
 		// {

@@ -16,6 +16,7 @@ export enum Collections {
 	NatsAuthK8sAccess = "nats_auth_k8s_access",
 	NatsAuthLimits = "nats_auth_limits",
 	NatsAuthOperators = "nats_auth_operators",
+	NatsAuthSigningKeys = "nats_auth_signing_keys",
 	NatsAuthUsers = "nats_auth_users",
 	Teams = "teams",
 	Users = "users",
@@ -154,6 +155,17 @@ export type NatsAuthOperatorsRecord = {
 	url: string;
 };
 
+export type NatsAuthSigningKeysRecord = {
+	account: RecordIdString;
+	id: string;
+	private_key?: string;
+	public_key?: string;
+	publish?: string[];
+	role: string;
+	seed?: string;
+	subscribe?: string[];
+};
+
 export type NatsAuthUsersRecord = {
 	account: RecordIdString;
 	bearer?: boolean;
@@ -165,6 +177,7 @@ export type NatsAuthUsersRecord = {
 	private_key?: string;
 	public_key?: string;
 	seed?: string;
+	signing_key?: RecordIdString;
 };
 
 export type TeamsRecord = {
@@ -212,6 +225,8 @@ export type NatsAuthLimitsResponse<Texpand = unknown> =
 	Required<NatsAuthLimitsRecord> & BaseSystemFields<Texpand>;
 export type NatsAuthOperatorsResponse<Texpand = unknown> =
 	Required<NatsAuthOperatorsRecord> & BaseSystemFields<Texpand>;
+export type NatsAuthSigningKeysResponse<Texpand = unknown> =
+	Required<NatsAuthSigningKeysRecord> & BaseSystemFields<Texpand>;
 export type NatsAuthUsersResponse<Texpand = unknown> =
 	Required<NatsAuthUsersRecord> & BaseSystemFields<Texpand>;
 export type TeamsResponse<Texpand = unknown> = Required<TeamsRecord> &
@@ -234,6 +249,7 @@ export type CollectionRecords = {
 	nats_auth_k8s_access: NatsAuthK8sAccessRecord;
 	nats_auth_limits: NatsAuthLimitsRecord;
 	nats_auth_operators: NatsAuthOperatorsRecord;
+	nats_auth_signing_keys: NatsAuthSigningKeysRecord;
 	nats_auth_users: NatsAuthUsersRecord;
 	teams: TeamsRecord;
 	users: UsersRecord;
@@ -250,6 +266,7 @@ export type CollectionResponses = {
 	nats_auth_k8s_access: NatsAuthK8sAccessResponse;
 	nats_auth_limits: NatsAuthLimitsResponse;
 	nats_auth_operators: NatsAuthOperatorsResponse;
+	nats_auth_signing_keys: NatsAuthSigningKeysResponse;
 	nats_auth_users: NatsAuthUsersResponse;
 	teams: TeamsResponse;
 	users: UsersResponse;
@@ -279,6 +296,9 @@ export type TypedPocketBase = PocketBase & {
 	collection(
 		idOrName: "nats_auth_operators",
 	): RecordService<NatsAuthOperatorsResponse>;
+	collection(
+		idOrName: "nats_auth_signing_keys",
+	): RecordService<NatsAuthSigningKeysResponse>;
 	collection(idOrName: "nats_auth_users"): RecordService<NatsAuthUsersResponse>;
 	collection(idOrName: "teams"): RecordService<TeamsResponse>;
 	collection(idOrName: "users"): RecordService<UsersResponse>;

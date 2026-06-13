@@ -87,17 +87,6 @@ type route struct {
 	// Transient value used to set the Info.GossipMode when initiating
 	// an implicit route and sending to the remote.
 	gossipMode byte
-	// This will be set in case of pooling so that a route can trigger
-	// the creation of the next after receiving the first PONG, ensuring
-	// that authentication did not fail.
-	startNewRoute *routeInfo
-}
-
-// This contains the information required to create a new route.
-type routeInfo struct {
-	url        *url.URL
-	rtype      RouteType
-	gossipMode byte
 }
 
 // Do not change the values/order since they are exchanged between servers.
@@ -143,7 +132,6 @@ const (
 // Can be changed for tests
 var (
 	routeConnectDelay    = DEFAULT_ROUTE_CONNECT
-	routeConnectMaxDelay = DEFAULT_ROUTE_CONNECT_MAX
 	routeMaxPingInterval = defaultRouteMaxPingInterval
 )
 
@@ -461,8 +449,7 @@ func (c *client) processInboundRoutedMsg(msg []byte) {
 	// Update statistics
 	c.in.msgs++
 	// The msg includes the CR_LF, so pull back out for accounting.
-	size := len(msg) - LEN_CR_LF
-	c.in.bytes += int32(size)
+	c.in.bytes += int32(len(msg) - LEN_CR_LF)
 
 	if c.opts.Verbose {
 		c.sendOK()
@@ -484,13 +471,6 @@ func (c *client) processInboundRoutedMsg(msg []byte) {
 		c.Debugf("Unknown account %q for routed message on subject: %q", c.pa.account, c.pa.subject)
 		return
 	}
-
-	acc.stats.Lock()
-	acc.stats.inMsgs++
-	acc.stats.inBytes += int64(size)
-	acc.stats.rt.inMsgs++
-	acc.stats.rt.inBytes += int64(size)
-	acc.stats.Unlock()
 
 	// Check for no interest, short circuit if so.
 	// This is the fanout scale.
@@ -1031,7 +1011,7 @@ func (s *Server) sendAsyncInfoToClients(regCli, wsCli bool) {
 			c.flags.isSet(firstPongSent) {
 			// sendInfo takes care of checking if the connection is still
 			// valid or not, so don't duplicate tests here.
-			c.enqueueProto(c.generateClientInfoJSON(info, true))
+			c.enqueueProto(c.generateClientInfoJSON(info))
 		}
 		c.mu.Unlock()
 	}
@@ -2055,7 +2035,7 @@ func (s *Server) createRoute(conn net.Conn, rURL *url.URL, rtype RouteType, goss
 	if tlsRequired {
 		c.Debugf("TLS handshake complete")
 		cs := c.nc.(*tls.Conn).ConnectionState()
-		c.Debugf("TLS version %s, cipher suite %s", tlsVersion(cs.Version), tls.CipherSuiteName(cs.CipherSuite))
+		c.Debugf("TLS version %s, cipher suite %s", tlsVersion(cs.Version), tlsCipher(cs.CipherSuite))
 	}
 
 	// Queue Connect proto if we solicited the connection.
@@ -2346,20 +2326,8 @@ func (s *Server) addRoute(c *client, didSolicit, sendDelayedInfo bool, gossipMod
 		if doOnce {
 			// check to be consistent and future proof. but will be same domain
 			if s.sameDomain(info.Domain) {
-				s.nodeToInfo.Store(rHash, nodeInfo{
-					name:            rn,
-					version:         s.info.Version,
-					cluster:         s.info.Cluster,
-					domain:          info.Domain,
-					id:              id,
-					tags:            nil,
-					cfg:             nil,
-					stats:           nil,
-					offline:         false,
-					js:              info.JetStream,
-					binarySnapshots: true, // Updated default to true. Versions 2.10.0+ support it.
-					accountNRG:      false,
-				})
+				s.nodeToInfo.Store(rHash,
+					nodeInfo{rn, s.info.Version, s.info.Cluster, info.Domain, id, nil, nil, nil, false, info.JetStream, false, false})
 			}
 		}
 
@@ -2403,18 +2371,20 @@ func (s *Server) addRoute(c *client, didSolicit, sendDelayedInfo bool, gossipMod
 		// Send the subscriptions interest.
 		s.sendSubsToRoute(c, idx, _EMPTY_)
 
-		// In pool mode, if we did not yet reach the cap, try to connect a new connection,
-		// but do so only after receiving the first PONG to our PING, which will ensure
-		// that we have proper authentication.
+		// In pool mode, if we did not yet reach the cap, try to connect a new connection
 		if pool && didSolicit && sz != effectivePoolSize {
-			c.mu.Lock()
-			c.route.startNewRoute = &routeInfo{
-				url:        url,
-				rtype:      rtype,
-				gossipMode: gossipMode,
-			}
-			c.sendPing()
-			c.mu.Unlock()
+			s.startGoRoutine(func() {
+				select {
+				case <-time.After(time.Duration(rand.Intn(100)) * time.Millisecond):
+				case <-s.quitCh:
+					// Doing this here and not as a defer because connectToRoute is also
+					// calling s.grWG.Done() on exit, so we do this only if we don't
+					// invoke connectToRoute().
+					s.grWG.Done()
+					return
+				}
+				s.connectToRoute(url, rtype, true, gossipMode, _EMPTY_)
+			})
 		}
 	}
 	s.mu.Unlock()
@@ -2906,7 +2876,6 @@ func (s *Server) connectToRoute(rURL *url.URL, rtype RouteType, firstConnect boo
 	excludedAddresses := s.routesToSelf
 	s.mu.RUnlock()
 
-	attemptDelay := routeConnectDelay
 	for attempts := 0; s.isRunning(); {
 		if tryForEver {
 			if !s.routeStillValid(rURL) {
@@ -2949,14 +2918,7 @@ func (s *Server) connectToRoute(rURL *url.URL, rtype RouteType, firstConnect boo
 			select {
 			case <-s.quitCh:
 				return
-			case <-time.After(attemptDelay):
-				if opts.Cluster.ConnectBackoff {
-					// Use exponential backoff for connection attempts.
-					attemptDelay *= 2
-					if attemptDelay > routeConnectMaxDelay {
-						attemptDelay = routeConnectMaxDelay
-					}
-				}
+			case <-time.After(routeConnectDelay):
 				continue
 			}
 		}

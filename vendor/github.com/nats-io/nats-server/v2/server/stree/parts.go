@@ -1,4 +1,4 @@
-// Copyright 2023-2025 The NATS Authors
+// Copyright 2023-2024 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -36,6 +36,7 @@ func genParts(filter []byte, parts [][]byte) [][]byte {
 				}
 				start = i + 1
 			} else if i < e && filter[i+1] == fwc && i+1 == e {
+				// We have a fwc
 				if i > start {
 					parts = append(parts, filter[start:i+1])
 				}
@@ -51,10 +52,6 @@ func genParts(filter []byte, parts [][]byte) [][]byte {
 			// Wildcard must be at the end or followed by tsep.
 			if next := i + 1; next == e || next < e && filter[next] != tsep {
 				continue
-			}
-			// Full wildcard must be terminal.
-			if filter[i] == fwc && i < e {
-				break
 			}
 			// We start with a pwc or fwc.
 			parts = append(parts, filter[i:i+1])

@@ -31,13 +31,17 @@ func (t Token) String() string {
 }
 
 func (t Token) Is(kind Kind, values ...string) bool {
-	if kind != t.Kind {
-		return false
+	if len(values) == 0 {
+		return kind == t.Kind
 	}
+
 	for _, v := range values {
 		if v == t.Value {
-			return true
+			goto found
 		}
 	}
-	return len(values) == 0
+	return false
+
+found:
+	return kind == t.Kind
 }
