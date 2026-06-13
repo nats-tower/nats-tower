@@ -6,9 +6,9 @@ import (
 	"github.com/expr-lang/expr/parser/utils"
 )
 
-type stateFn func(*lexer) stateFn
+type stateFn func(*Lexer) stateFn
 
-func root(l *lexer) stateFn {
+func root(l *Lexer) stateFn {
 	switch r := l.next(); {
 	case r == eof:
 		l.emitEOF()
@@ -25,6 +25,14 @@ func root(l *lexer) stateFn {
 		l.emitValue(String, str)
 	case r == '`':
 		l.scanRawString(r)
+	case (r == 'b' || r == 'B') && (l.peek() == '\'' || l.peek() == '"'):
+		quote := l.next()
+		l.scanString(quote)
+		str, err := unescapeBytes(l.word()[1:]) // skip 'b'
+		if err != nil {
+			l.error("%v", err)
+		}
+		l.emitValue(Bytes, str)
 	case '0' <= r && r <= '9':
 		l.backup()
 		return number
@@ -61,7 +69,7 @@ func root(l *lexer) stateFn {
 	return root
 }
 
-func number(l *lexer) stateFn {
+func number(l *Lexer) stateFn {
 	if !l.scanNumber() {
 		return l.error("bad number syntax: %q", l.word())
 	}
@@ -69,7 +77,7 @@ func number(l *lexer) stateFn {
 	return root
 }
 
-func (l *lexer) scanNumber() bool {
+func (l *Lexer) scanNumber() bool {
 	digits := "0123456789_"
 	// Is it hex?
 	if l.accept("0") {
@@ -107,7 +115,7 @@ func (l *lexer) scanNumber() bool {
 	return true
 }
 
-func dot(l *lexer) stateFn {
+func dot(l *Lexer) stateFn {
 	l.next()
 	if l.accept("0123456789") {
 		l.backup()
@@ -118,7 +126,7 @@ func dot(l *lexer) stateFn {
 	return root
 }
 
-func identifier(l *lexer) stateFn {
+func identifier(l *Lexer) stateFn {
 loop:
 	for {
 		switch r := l.next(); {
@@ -129,8 +137,14 @@ loop:
 			switch l.word() {
 			case "not":
 				return not
-			case "in", "or", "and", "matches", "contains", "startsWith", "endsWith", "let", "if", "else":
+			case "in", "or", "and", "matches", "contains", "startsWith", "endsWith", "let":
 				l.emit(Operator)
+			case "if", "else":
+				if !l.DisableIfOperator {
+					l.emit(Operator)
+				} else {
+					l.emit(Identifier)
+				}
 			default:
 				l.emit(Identifier)
 			}
@@ -140,7 +154,7 @@ loop:
 	return root
 }
 
-func not(l *lexer) stateFn {
+func not(l *Lexer) stateFn {
 	l.emit(Operator)
 
 	l.skipSpaces()
@@ -167,13 +181,13 @@ func not(l *lexer) stateFn {
 	return root
 }
 
-func questionMark(l *lexer) stateFn {
+func questionMark(l *Lexer) stateFn {
 	l.accept(".?")
 	l.emit(Operator)
 	return root
 }
 
-func slash(l *lexer) stateFn {
+func slash(l *Lexer) stateFn {
 	if l.accept("/") {
 		return singleLineComment
 	}
@@ -184,7 +198,7 @@ func slash(l *lexer) stateFn {
 	return root
 }
 
-func singleLineComment(l *lexer) stateFn {
+func singleLineComment(l *Lexer) stateFn {
 	for {
 		r := l.next()
 		if r == eof || r == '\n' {
@@ -195,7 +209,7 @@ func singleLineComment(l *lexer) stateFn {
 	return root
 }
 
-func multiLineComment(l *lexer) stateFn {
+func multiLineComment(l *Lexer) stateFn {
 	for {
 		r := l.next()
 		if r == eof {
@@ -209,7 +223,7 @@ func multiLineComment(l *lexer) stateFn {
 	return root
 }
 
-func pointer(l *lexer) stateFn {
+func pointer(l *Lexer) stateFn {
 	l.accept("#")
 	l.emit(Operator)
 	for {

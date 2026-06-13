@@ -1,4 +1,4 @@
-// Copyright 2023-2024 The NATS Authors
+// Copyright 2023-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -239,7 +239,7 @@ func (ss SequenceSet) EncodeLen() int {
 	return minLen + (ss.Nodes() * ((numBuckets+1)*8 + 2))
 }
 
-func (ss SequenceSet) Encode(buf []byte) ([]byte, error) {
+func (ss SequenceSet) Encode(buf []byte) []byte {
 	nn, encLen := ss.Nodes(), ss.EncodeLen()
 
 	if cap(buf) < encLen {
@@ -268,7 +268,7 @@ func (ss SequenceSet) Encode(buf []byte) ([]byte, error) {
 		le.PutUint16(buf[i:], uint16(n.h))
 		i += 2
 	})
-	return buf[:i], nil
+	return buf[:i]
 }
 
 // ErrBadEncoding is returned when we can not decode properly.

@@ -3,6 +3,7 @@ package builtin
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -16,6 +17,10 @@ import (
 var (
 	Index map[string]int
 	Names []string
+
+	// MaxDepth limits the recursion depth for nested structures.
+	MaxDepth      = 10000
+	ErrorMaxDepth = errors.New("recursion depth exceeded")
 )
 
 func init() {
@@ -377,7 +382,7 @@ var Builtins = []*Function{
 	{
 		Name: "max",
 		Func: func(args ...any) (any, error) {
-			return minMax("max", runtime.Less, args...)
+			return minMax("max", runtime.Less, 0, args...)
 		},
 		Validate: func(args []reflect.Type) (reflect.Type, error) {
 			return validateAggregateFunc("max", args)
@@ -386,7 +391,7 @@ var Builtins = []*Function{
 	{
 		Name: "min",
 		Func: func(args ...any) (any, error) {
-			return minMax("min", runtime.More, args...)
+			return minMax("min", runtime.More, 0, args...)
 		},
 		Validate: func(args []reflect.Type) (reflect.Type, error) {
 			return validateAggregateFunc("min", args)
@@ -395,7 +400,7 @@ var Builtins = []*Function{
 	{
 		Name: "mean",
 		Func: func(args ...any) (any, error) {
-			count, sum, err := mean(args...)
+			count, sum, err := mean(0, args...)
 			if err != nil {
 				return nil, err
 			}
@@ -411,7 +416,7 @@ var Builtins = []*Function{
 	{
 		Name: "median",
 		Func: func(args ...any) (any, error) {
-			values, err := median(args...)
+			values, err := median(0, args...)
 			if err != nil {
 				return nil, err
 			}
@@ -940,7 +945,10 @@ var Builtins = []*Function{
 			if v.Kind() != reflect.Array && v.Kind() != reflect.Slice {
 				return nil, size, fmt.Errorf("cannot flatten %s", v.Kind())
 			}
-			ret := flatten(v)
+			ret, err := flatten(v, 0)
+			if err != nil {
+				return nil, 0, err
+			}
 			size = uint(len(ret))
 			return ret, size, nil
 		},
@@ -992,13 +1000,17 @@ var Builtins = []*Function{
 
 			var desc bool
 			if len(args) == 2 {
-				switch args[1].(string) {
+				order, ok := args[1].(string)
+				if !ok {
+					return nil, 0, fmt.Errorf("sort order argument must be a string (got %T)", args[1])
+				}
+				switch order {
 				case "asc":
 					desc = false
 				case "desc":
 					desc = true
 				default:
-					return nil, 0, fmt.Errorf("invalid order %s, expected asc or desc", args[1])
+					return nil, 0, fmt.Errorf("invalid order %s, expected asc or desc", order)
 				}
 			}
 

@@ -71,10 +71,9 @@ const (
 // JSStreamActionAdvisory indicates that a stream was created, edited or deleted
 type JSStreamActionAdvisory struct {
 	TypedEvent
-	Stream   string             `json:"stream"`
-	Action   ActionAdvisoryType `json:"action"`
-	Template string             `json:"template,omitempty"`
-	Domain   string             `json:"domain,omitempty"`
+	Stream string             `json:"stream"`
+	Action ActionAdvisoryType `json:"action"`
+	Domain string             `json:"domain,omitempty"`
 }
 
 const JSStreamActionAdvisoryType = "io.nats.jetstream.advisory.v1.stream_action"
@@ -252,6 +251,28 @@ type JSStreamQuorumLostAdvisory struct {
 	Replicas []*PeerInfo `json:"replicas"`
 	Domain   string      `json:"domain,omitempty"`
 }
+
+// JSStreamBatchAbandonedAdvisoryType is sent when a stream's atomic batch is abandoned.
+const JSStreamBatchAbandonedAdvisoryType = "io.nats.jetstream.advisory.v1.stream_batch_abandoned"
+
+// JSStreamBatchAbandonedAdvisory indicates that a stream's batch was abandoned.
+type JSStreamBatchAbandonedAdvisory struct {
+	TypedEvent
+	Account string             `json:"account,omitempty"`
+	Stream  string             `json:"stream"`
+	Domain  string             `json:"domain,omitempty"`
+	BatchId string             `json:"batch"`
+	Reason  BatchAbandonReason `json:"reason"`
+}
+
+type BatchAbandonReason string
+
+var (
+	BatchTimeout            BatchAbandonReason = "timeout"
+	BatchLarge              BatchAbandonReason = "large"
+	BatchIncomplete         BatchAbandonReason = "incomplete"
+	BatchRequirementsNotMet BatchAbandonReason = "unsupported"
+)
 
 // JSConsumerLeaderElectedAdvisoryType is sent when the system elects a leader for a consumer.
 const JSConsumerLeaderElectedAdvisoryType = "io.nats.jetstream.advisory.v1.consumer_leader_elected"

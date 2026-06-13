@@ -101,7 +101,11 @@ func (m *Manager) createConsumer(req api.JSApiConsumerCreateRequest) (info *api.
 	var resp api.JSApiConsumerCreateResponse
 
 	if req.Config.Name == "" {
-		return nil, fmt.Errorf("consumer conmfiguration requires a name")
+		return nil, fmt.Errorf("consumer configuration requires a name")
+	}
+
+	if !IsValidName(req.Config.Name) {
+		return nil, fmt.Errorf("%q is not a valid consumer name", req.Config.Name)
 	}
 
 	var subj string
@@ -239,6 +243,10 @@ func (m *Manager) loadConsumerInfo(s string, c string) (info api.ConsumerInfo, e
 	err = m.jsonRequest(fmt.Sprintf(api.JSApiConsumerInfoT, s, c), nil, &resp)
 	if err != nil {
 		return info, err
+	}
+
+	if resp.ConsumerInfo == nil {
+		return info, fmt.Errorf("invalid response retrieving consumer info for %q > %q", s, c)
 	}
 
 	return *resp.ConsumerInfo, nil
@@ -398,6 +406,13 @@ func AcknowledgeAll() ConsumerOption {
 func AcknowledgeExplicit() ConsumerOption {
 	return func(o *api.ConsumerConfig) error {
 		o.AckPolicy = api.AckExplicit
+		return nil
+	}
+}
+
+func AcknowledgeFlowControl() ConsumerOption {
+	return func(o *api.ConsumerConfig) error {
+		o.AckPolicy = api.AckFlowControl
 		return nil
 	}
 }
@@ -575,6 +590,10 @@ func BackoffIntervals(i ...time.Duration) ConsumerOption {
 // BackoffPolicy sets a consumer policy
 func BackoffPolicy(policy []time.Duration) ConsumerOption {
 	return func(o *api.ConsumerConfig) error {
+		if len(policy) == 0 {
+			return fmt.Errorf("at least one interval is required")
+		}
+
 		o.BackOff = policy
 		return nil
 	}
@@ -629,6 +648,21 @@ func PauseUntil(deadline time.Time) ConsumerOption {
 	}
 }
 
+// PrioritizedPriorityGroups sets the consumer to be a prioritized priority consumer with a certain list of groups. When groups is empty the 'none' policy is set
+func PrioritizedPriorityGroups(groups ...string) ConsumerOption {
+	return func(o *api.ConsumerConfig) error {
+		if len(groups) == 0 {
+			o.PriorityGroups = []string{}
+			o.PriorityPolicy = api.PriorityNone
+			return nil
+		}
+
+		o.PriorityPolicy = api.PriorityPrioritized
+		o.PriorityGroups = groups
+		return nil
+	}
+}
+
 // PinnedClientPriorityGroups sets the consumer to be a pinned client priority consumer with a certain list of groups. When groups is empty the 'none' policy is set
 func PinnedClientPriorityGroups(ttl time.Duration, groups ...string) ConsumerOption {
 	return func(o *api.ConsumerConfig) error {
@@ -664,7 +698,6 @@ func OverflowPriorityGroups(groups ...string) ConsumerOption {
 }
 
 // UpdateConfiguration updates the consumer configuration
-// At present the description, ack wait, max deliver, sample frequency, max ack pending, max waiting and header only settings can be changed
 func (c *Consumer) UpdateConfiguration(opts ...ConsumerOption) error {
 	if !c.IsDurable() {
 		return fmt.Errorf("only durable consumers can be updated")
@@ -686,6 +719,24 @@ func (c *Consumer) UpdateConfiguration(opts ...ConsumerOption) error {
 // Reset reloads the Consumer configuration from the JetStream server
 func (c *Consumer) Reset() error {
 	return c.mgr.loadConfigForConsumer(c)
+}
+
+// ResetConsumerState rewinds the consumer to a previous state, 0 resets to the ack floor
+func (c *Consumer) ResetConsumerState(seq uint64) (uint64, error) {
+	req := api.JSApiConsumerResetRequest{Seq: seq}
+
+	var resp api.JSApiConsumerResetResponse
+	err := c.mgr.jsonRequest(fmt.Sprintf(api.JSApiConsumerResetT, c.StreamName(), c.Name()), req, &resp)
+	if err != nil {
+		return 0, err
+	}
+
+	c.Lock()
+	c.cfg = &resp.Config
+	c.lastInfo = resp.ConsumerInfo
+	c.Unlock()
+
+	return resp.ResetSeq, nil
 }
 
 // NextSubject returns the subject used to retrieve the next message for pull-based Consumers, empty when not a pull-base consumer
@@ -767,7 +818,7 @@ func (m *Manager) NextMsg(stream string, consumer string) (*nats.Msg, error) {
 		return nil, err
 	}
 
-	return m.request(s, rj)
+	return m.request(s, rj, nil)
 }
 
 // NextMsgRequest creates a request for a batch of messages on a consumer, data or control flow messages will be sent to inbox
@@ -801,7 +852,7 @@ func (m *Manager) NextMsgContext(ctx context.Context, stream string, consumer st
 		return nil, err
 	}
 
-	return m.requestWithContext(ctx, s, []byte(strconv.Itoa(1)))
+	return m.requestWithContext(ctx, s, []byte(strconv.Itoa(1)), nil)
 }
 
 // NextMsgRequest creates a request for a batch of messages, data or control flow messages will be sent to inbox
@@ -898,6 +949,10 @@ func (c *Consumer) ClusterInfo() (api.ClusterInfo, error) {
 		return api.ClusterInfo{}, err
 	}
 
+	if nfo.Cluster == nil {
+		return api.ClusterInfo{}, fmt.Errorf("consumer %q has no cluster info", c.name)
+	}
+
 	return *nfo.Cluster, nil
 }
 
@@ -971,6 +1026,10 @@ func (c *Consumer) Pause(deadline time.Time) (*api.JSApiConsumerPauseResponse, e
 		return nil, err
 	}
 
+	if resp == nil {
+		return nil, fmt.Errorf("invalid response while pausing consumer %q", c.Name())
+	}
+
 	if !resp.Paused {
 		return nil, fmt.Errorf("pause request failed, perhaps due to a time in the past")
 	}
@@ -985,6 +1044,10 @@ func (c *Consumer) Resume() error {
 	err := c.mgr.jsonRequest(fmt.Sprintf(api.JSApiConsumerPauseT, c.StreamName(), c.Name()), nil, &resp)
 	if err != nil {
 		return err
+	}
+
+	if resp == nil {
+		return fmt.Errorf("invalid response while resuming consumer %q", c.Name())
 	}
 
 	if resp.Paused {

@@ -36,6 +36,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -68,6 +69,7 @@ type settings struct {
 	JSEventPrefix       string   `json:"jetstream_event_prefix"`
 	InboxPrefix         string   `json:"inbox_prefix"`
 	UserJwt             string   `json:"user_jwt"`
+	UserSeed            string   `json:"user_seed"`
 	ColorScheme         string   `json:"color_scheme"`
 	TLSFirst            bool     `json:"tls_first"`
 	WinCertStoreType    string   `json:"windows_cert_store"`
@@ -358,6 +360,7 @@ func (c *Context) NATSOptions(opts ...nats.Option) ([]nats.Option, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			wipeSlice(out)
 
 			userCB := func() (string, error) {
@@ -378,10 +381,22 @@ func (c *Context) NATSOptions(opts ...nats.Option) ([]nats.Option, error) {
 		}
 
 		nopts = append(nopts, nko)
+
+	case c.UserJWT() != "" && c.UserSeed() != "":
+		nopts = append(nopts, nats.UserJWTAndSeed(c.UserJWT(), c.UserSeed()))
+
+	case c.UserJWT() != "" && c.UserSeed() == "":
+		userCB := func() (string, error) {
+			return c.UserJWT(), nil
+		}
+		sigCB := func(nonce []byte) ([]byte, error) {
+			return nil, nil
+		}
+		nopts = append(nopts, nats.UserJWT(userCB, sigCB))
 	}
 
 	if c.Token() != "" {
-		nopts = append(nopts, nats.Token(expandHomedir(c.Token())))
+		nopts = append(nopts, nats.Token(c.Token()))
 	}
 
 	if c.Certificate() != "" && c.Key() != "" {
@@ -416,7 +431,7 @@ func (c *Context) NATSOptions(opts ...nats.Option) ([]nats.Option, error) {
 }
 
 func (c *Context) parseWinCertStoreType(t string) (certstore.StoreType, error) {
-	storeTypeString := c.config.WinCertStoreType
+	storeTypeString := t
 	switch storeTypeString {
 	case "machine":
 		storeTypeString = "windowslocalmachine"
@@ -511,8 +526,12 @@ func (c *Context) loadActiveContext() error {
 		return err
 	}
 
-	// performing environment variable expansion for the path of the cerds.
-	c.config.Creds = os.ExpandEnv(c.config.Creds)
+	// Expand ~ and environment variables in all path fields.
+	c.config.Creds = expandHomedir(c.config.Creds)
+	c.config.NKey = expandHomedir(c.config.NKey)
+	c.config.Cert = expandHomedir(c.config.Cert)
+	c.config.Key = expandHomedir(c.config.Key)
+	c.config.CA = expandHomedir(c.config.CA)
 
 	if c.config.NSCLookup != "" {
 		err := c.resolveNscLookup()
@@ -565,7 +584,9 @@ func (c *Context) resolveNscLookup() error {
 }
 
 func expandHomedir(path string) string {
-	if path[0] != '~' {
+	path = os.ExpandEnv(path)
+
+	if len(path) == 0 || path[0] != '~' {
 		return path
 	}
 
@@ -578,7 +599,7 @@ func expandHomedir(path string) string {
 }
 
 func validName(name string) bool {
-	return name != "" && !strings.Contains(name, "..") && !strings.Contains(name, string(os.PathSeparator))
+	return name != "" && !strings.Contains(name, "..") && !strings.ContainsAny(name, "/\\")
 }
 
 func numCreds(c *Context) int {
@@ -588,6 +609,7 @@ func numCreds(c *Context) int {
 		c.config.Creds,
 		c.config.NKey,
 		c.config.NSCLookup,
+		c.config.UserJwt,
 	}
 
 	for _, c := range creds {
@@ -954,9 +976,23 @@ func WithUserJWT(p string) Option {
 	}
 }
 
+// WithUserSeed sets the user seed
+func WithUserSeed(p string) Option {
+	return func(s *settings) {
+		if p != "" {
+			s.UserSeed = p
+		}
+	}
+}
+
 // UserJWT retrieves the configured user jwt, empty if not set
 func (c *Context) UserJWT() string {
 	return c.config.UserJwt
+}
+
+// UserSeed retrieves the configured user seed, empty if not set
+func (c *Context) UserSeed() string {
+	return c.config.UserSeed
 }
 
 // WithSocksProxy sets the SOCKS5 Proxy.
@@ -1040,4 +1076,7 @@ func wipeSlice(buf []byte) {
 	for i := range buf {
 		buf[i] = 'x'
 	}
+	// KeepAlive prevents the compiler from treating the loop as a dead store
+	// and eliding the writes before the slice is garbage collected.
+	runtime.KeepAlive(buf)
 }

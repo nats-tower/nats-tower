@@ -18,9 +18,13 @@ import (
 )
 
 const (
-	JSApiLeaderStepDown = "$JS.API.META.LEADER.STEPDOWN"
-	JSApiRemoveServer   = "$JS.API.SERVER.REMOVE"
-	JSApiPurgeAccountT  = "$JS.API.ACCOUNT.PURGE.%s"
+	JSApiLeaderStepDown       = "$JS.API.META.LEADER.STEPDOWN"
+	JSApiLeaderStepDownPrefix = "$JS.API.META.LEADER.STEPDOWN"
+	JSApiLeaderStepDownT      = "$JS.API.META.LEADER.STEPDOWN"
+	JSApiRemoveServer         = "$JS.API.SERVER.REMOVE"
+	JSApiRemoveServerPrefix   = "$JS.API.SERVER.REMOVE"
+	JSApiPurgeAccountT        = "$JS.API.ACCOUNT.PURGE.%s"
+	JSApiPurgeAccountPrefix   = "$JS.API.ACCOUNT.PURGE"
 )
 
 // io.nats.jetstream.api.v1.meta_leader_stepdown_request
@@ -58,19 +62,22 @@ type JSApiAccountPurgeResponse struct {
 // ClusterInfo shows information about the underlying set of servers
 // that make up the stream or consumer.
 type ClusterInfo struct {
-	Name      string      `json:"name,omitempty" yaml:"name"`
-	RaftGroup string      `json:"raft_group,omitempty"`
-	Leader    string      `json:"leader,omitempty" yaml:"leader"`
-	Replicas  []*PeerInfo `json:"replicas,omitempty" yaml:"replicas"`
+	Name        string      `json:"name,omitempty" yaml:"name"`
+	RaftGroup   string      `json:"raft_group,omitempty" yaml:"raft_group"`
+	Leader      string      `json:"leader,omitempty" yaml:"leader"`
+	LeaderSince *time.Time  `json:"leader_since,omitempty" yaml:"leader_since"`
+	SystemAcc   bool        `json:"system_account,omitempty" yaml:"system_account"`
+	TrafficAcc  string      `json:"traffic_account,omitempty" yaml:"traffic_account"`
+	Replicas    []*PeerInfo `json:"replicas,omitempty" yaml:"replicas"`
 }
 
 // PeerInfo shows information about all the peers in the cluster that
 // are supporting the stream or consumer.
 type PeerInfo struct {
-	Name     string        `json:"name" yaml:"name"`
-	Current  bool          `json:"current" yaml:"current"`
-	Observer bool          `json:"observer,omitempty" yaml:"observer"`
-	Offline  bool          `json:"offline,omitempty" yaml:"offline"`
-	Active   time.Duration `json:"active" yaml:"active"`
-	Lag      uint64        `json:"lag,omitempty" yaml:"lag"`
+	Name    string        `json:"name" yaml:"name"`
+	Current bool          `json:"current" yaml:"current"`
+	Offline bool          `json:"offline,omitempty" yaml:"offline"`
+	Active  time.Duration `json:"active" yaml:"active"`
+	Lag     uint64        `json:"lag,omitempty" yaml:"lag"`
+	Peer    string        `json:"peer" yaml:"peer"`
 }
