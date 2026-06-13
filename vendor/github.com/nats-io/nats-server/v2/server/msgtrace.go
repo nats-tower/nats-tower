@@ -1,4 +1,4 @@
-// Copyright 2024 The NATS Authors
+// Copyright 2024-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -367,6 +367,13 @@ func (c *client) initMsgTrace() *msgTrace {
 			}
 		}
 		dest = getHdrVal(MsgTraceDest)
+		if c.kind == CLIENT {
+			if td, ok := c.allowedMsgTraceDest(hdr, false); !ok {
+				return nil
+			} else if td != _EMPTY_ {
+				dest = td
+			}
+		}
 		// Check the destination to see if this is a valid public subject.
 		if !IsValidPublishSubject(dest) {
 			// We still have to return a msgTrace object (if traceOnly is set)

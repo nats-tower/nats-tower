@@ -1,4 +1,4 @@
-// Copyright 2016-2020 The NATS Authors
+// Copyright 2016-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@
 package server
 
 import (
+	"crypto/fips140"
 	"crypto/tls"
 )
 
@@ -94,6 +95,16 @@ var curvePreferenceMap = map[string]tls.CurveID{
 // reorder to default to the highest level of security.  See:
 // https://blog.bracebin.com/achieving-perfect-ssl-labs-score-with-go
 func defaultCurvePreferences() []tls.CurveID {
+	if fips140.Enabled() {
+		// X25519 is not FIPS-approved by itself, but it is when
+		// combined with MLKEM768.
+		return []tls.CurveID{
+			tls.X25519MLKEM768, // post-quantum
+			tls.CurveP256,
+			tls.CurveP384,
+			tls.CurveP521,
+		}
+	}
 	return []tls.CurveID{
 		tls.X25519, // faster than P256, arguably more secure
 		tls.CurveP256,

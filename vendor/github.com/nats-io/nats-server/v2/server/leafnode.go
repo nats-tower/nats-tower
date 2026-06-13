@@ -63,9 +63,9 @@ const (
 	// LEAF connection as opposed to a CLIENT.
 	leafNodeWSPath = "/leafnode"
 
-	// This is the time the server will wait, when receiving a CONNECT,
-	// before closing the connection if the required minimum version is not met.
-	leafNodeWaitBeforeClose = 5 * time.Second
+	// When a soliciting leafnode is rejected because it does not meet the
+	// configured minimum version, delay the next reconnect attempt by this long.
+	leafNodeMinVersionReconnectDelay = 5 * time.Second
 )
 
 type leaf struct {
@@ -76,7 +76,7 @@ type leaf struct {
 	isSpoke bool
 	// remoteCluster is when we are a hub but the spoke leafnode is part of a cluster.
 	remoteCluster string
-	// remoteServer holds onto the remove server's name or ID.
+	// remoteServer holds onto the remote server's name or ID.
 	remoteServer string
 	// domain name of remote server
 	remoteDomain string
@@ -1446,6 +1446,11 @@ func (c *client) processLeafnodeInfo(info *Info) {
 	if finishConnect {
 		s.leafNodeFinishConnectProcess(c)
 	}
+
+	// Check to see if we need to kick any internal source or mirror consumers.
+	// This will be a no-op if JetStream not enabled for this server or if the bound account
+	// does not have jetstream.
+	s.checkInternalSyncConsumers(c.acc)
 }
 
 func (s *Server) negotiateLeafCompression(c *client, didSolicit bool, infoCompression string, co *CompressionOpts) (bool, error) {
@@ -1880,17 +1885,11 @@ func (c *client) processLeafNodeConnect(s *Server, arg []byte, lang string) erro
 	if mv := s.getOpts().LeafNode.MinVersion; mv != _EMPTY_ {
 		major, minor, update, _ := versionComponents(mv)
 		if !versionAtLeast(proto.Version, major, minor, update) {
-			// We are going to send back an INFO because otherwise recent
-			// versions of the remote server would simply break the connection
-			// after 2 seconds if not receiving it. Instead, we want the
-			// other side to just "stall" until we finish waiting for the holding
-			// period and close the connection below.
+			// Send back an INFO so recent remote servers process the rejection
+			// cleanly, then close immediately. The soliciting side applies the
+			// reconnect delay when it processes the error.
 			s.sendPermsAndAccountInfo(c)
-			c.sendErrAndErr(fmt.Sprintf("connection rejected since minimum version required is %q", mv))
-			select {
-			case <-c.srv.quitCh:
-			case <-time.After(leafNodeWaitBeforeClose):
-			}
+			c.sendErrAndErr(fmt.Sprintf("%s %q", ErrLeafNodeMinVersionRejected, mv))
 			c.closeConnection(MinimumVersionRequired)
 			return ErrMinimumVersionRequired
 		}
@@ -1954,11 +1953,12 @@ func (c *client) processLeafNodeConnect(s *Server, arg []byte, lang string) erro
 	// If we received pub deny permissions from the other end, merge with existing ones.
 	c.mergeDenyPermissions(pub, proto.DenyPub)
 
+	acc := c.acc
 	c.mu.Unlock()
 
 	// Register the cluster, even if empty, as long as we are acting as a hub.
 	if !proto.Hub {
-		c.acc.registerLeafNodeCluster(proto.Cluster)
+		acc.registerLeafNodeCluster(proto.Cluster)
 	}
 
 	// Add in the leafnode here since we passed through auth at this point.
@@ -1973,10 +1973,57 @@ func (c *client) processLeafNodeConnect(s *Server, arg []byte, lang string) erro
 	s.initLeafNodeSmapAndSendSubs(c)
 
 	// Announce the account connect event for a leaf node.
-	// This will no-op as needed.
+	// This will be a no-op as needed.
 	s.sendLeafNodeConnect(c.acc)
 
+	// Check to see if we need to kick any internal source or mirror consumers.
+	// This will be a no-op if JetStream not enabled for this server or if the bound account
+	// does not have jetstream.
+	s.checkInternalSyncConsumers(acc)
+
 	return nil
+}
+
+// checkInternalSyncConsumers
+func (s *Server) checkInternalSyncConsumers(acc *Account) {
+	// Grab our js
+	js := s.getJetStream()
+
+	// Only applicable if we have JS and the leafnode has JS as well.
+	// We check for remote JS outside.
+	if !js.isEnabled() || acc == nil {
+		return
+	}
+
+	// We will check all streams in our local account. They must be a leader and
+	// be sourcing or mirroring. We will check the external config on the stream itself
+	// if this is cross domain, or if the remote domain is empty, meaning we might be
+	// extending the system across this leafnode connection and hence we would be extending
+	// our own domain.
+	jsa := js.lookupAccount(acc)
+	if jsa == nil {
+		return
+	}
+
+	var streams []*stream
+	jsa.mu.RLock()
+	for _, mset := range jsa.streams {
+		mset.cfgMu.RLock()
+		// We need to have a mirror or source defined.
+		// We do not want to force another lock here to look for leader status,
+		// so collect and after we release jsa will make sure.
+		if mset.cfg.Mirror != nil || len(mset.cfg.Sources) > 0 {
+			streams = append(streams, mset)
+		}
+		mset.cfgMu.RUnlock()
+	}
+	jsa.mu.RUnlock()
+
+	// Now loop through all candidates and check if we are the leader and have NOT
+	// created the sync up consumer.
+	for _, mset := range streams {
+		mset.retryDisconnectedSyncConsumers()
+	}
 }
 
 // Returns the remote cluster name. This is set only once so does not require a lock.
@@ -2174,9 +2221,11 @@ func (s *Server) updateInterestForAccountOnGateway(accName string, sub *subscrip
 	acc.updateLeafNodes(sub, delta)
 }
 
-// updateLeafNodes will make sure to update the account smap for the subscription.
+// updateLeafNodesEx will make sure to update the account smap for the subscription.
 // Will also forward to all leaf nodes as needed.
-func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
+// If `hubOnly` is true, then will update only leaf nodes that connect to this server
+// (that is, for which this server acts as a hub to them).
+func (acc *Account) updateLeafNodesEx(sub *subscription, delta int32, hubOnly bool) {
 	if acc == nil || sub == nil {
 		return
 	}
@@ -2224,8 +2273,14 @@ func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
 		if ln == sub.client {
 			continue
 		}
-		// Check to make sure this sub does not have an origin cluster that matches the leafnode.
 		ln.mu.Lock()
+		// If `hubOnly` is true, it means that we want to update only leafnodes
+		// that connect to this server (so isHubLeafNode() would return `true`).
+		if hubOnly && !ln.isHubLeafNode() {
+			ln.mu.Unlock()
+			continue
+		}
+		// Check to make sure this sub does not have an origin cluster that matches the leafnode.
 		// If skipped, make sure that we still let go the "$LDS." subscription that allows
 		// the detection of loops as long as different cluster.
 		clusterDifferent := cluster != ln.remoteCluster()
@@ -2234,6 +2289,12 @@ func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
 		}
 		ln.mu.Unlock()
 	}
+}
+
+// updateLeafNodes will make sure to update the account smap for the subscription.
+// Will also forward to all leaf nodes as needed.
+func (acc *Account) updateLeafNodes(sub *subscription, delta int32) {
+	acc.updateLeafNodesEx(sub, delta, false)
 }
 
 // This will make an update to our internal smap and determine if we should send out
@@ -2480,6 +2541,14 @@ func (c *client) processLeafSub(argo []byte) (err error) {
 	}
 
 	acc := c.acc
+	// Guard against LS+ arriving before CONNECT has been processed, which
+	// can happen when compression is enabled.
+	if acc == nil {
+		c.mu.Unlock()
+		c.sendErr("Authorization Violation")
+		c.closeConnection(ProtocolViolation)
+		return nil
+	}
 	// Check if we have a loop.
 	ldsPrefix := bytes.HasPrefix(sub.subject, []byte(leafNodeLoopDetectionSubjectPrefix))
 
@@ -2552,7 +2621,7 @@ func (c *client) processLeafSub(argo []byte) (err error) {
 
 	// Only add in shadow subs if a new sub or qsub.
 	if osub == nil {
-		if err := c.addShadowSubscriptions(acc, sub, true); err != nil {
+		if err := c.addShadowSubscriptions(acc, sub); err != nil {
 			c.Errorf(err.Error())
 		}
 	}
@@ -2596,12 +2665,20 @@ func (c *client) processLeafUnsub(arg []byte) error {
 	// Indicate any activity, so pub and sub or unsubs.
 	c.in.subs++
 
-	acc := c.acc
 	srv := c.srv
 
 	c.mu.Lock()
 	if c.isClosed() {
 		c.mu.Unlock()
+		return nil
+	}
+
+	acc := c.acc
+	// Guard against LS- arriving before CONNECT has been processed.
+	if acc == nil {
+		c.mu.Unlock()
+		c.sendErr("Authorization Violation")
+		c.closeConnection(ProtocolViolation)
 		return nil
 	}
 
@@ -2901,6 +2978,11 @@ func (c *client) leafProcessErr(errStr string) {
 		c.Errorf("Leafnode connection dropped with same cluster name error. Delaying attempt to reconnect for %v", delay)
 		return
 	}
+	if strings.Contains(errStr, ErrLeafNodeMinVersionRejected.Error()) {
+		_, delay := c.setLeafConnectDelayIfSoliciting(leafNodeMinVersionReconnectDelay)
+		c.Errorf("Leafnode connection dropped due to minimum version requirement. Delaying attempt to reconnect for %v", delay)
+		return
+	}
 
 	// We will look for Loop detected error coming from the other side.
 	// If we solicit, set the connect delay.
@@ -2923,7 +3005,10 @@ func (c *client) setLeafConnectDelayIfSoliciting(delay time.Duration) (string, t
 		}
 		c.leaf.remote.setConnectDelay(delay)
 	}
-	accName := c.acc.Name
+	var accName string
+	if c.acc != nil {
+		accName = c.acc.Name
+	}
 	c.mu.Unlock()
 	return accName, delay
 }

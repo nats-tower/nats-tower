@@ -15,10 +15,8 @@ package gsl
 
 import (
 	"errors"
+	"strings"
 	"sync"
-	"unsafe"
-
-	"github.com/nats-io/nats-server/v2/server/stree"
 )
 
 // Sublist is a routing mechanism to handle subject distribution and
@@ -44,6 +42,16 @@ var (
 	ErrNilChan           = errors.New("gsl: nil channel")
 	ErrAlreadyRegistered = errors.New("gsl: notification already registered")
 )
+
+// SimpleSublist is an alias type for GenericSublist that takes
+// empty values, useful for tracking interest only without any
+// unnecessary allocations.
+type SimpleSublist = GenericSublist[struct{}]
+
+// NewSimpleSublist will create a simple sublist.
+func NewSimpleSublist() *SimpleSublist {
+	return &GenericSublist[struct{}]{root: newLevel[struct{}]()}
+}
 
 // A GenericSublist stores and efficiently retrieves subscriptions.
 type GenericSublist[T comparable] struct {
@@ -82,24 +90,13 @@ func NewSublist[T comparable]() *GenericSublist[T] {
 
 // Insert adds a subscription into the sublist
 func (s *GenericSublist[T]) Insert(subject string, value T) error {
-	tsa := [32]string{}
-	tokens := tsa[:0]
-	start := 0
-	for i := 0; i < len(subject); i++ {
-		if subject[i] == btsep {
-			tokens = append(tokens, subject[start:i])
-			start = i + 1
-		}
-	}
-	tokens = append(tokens, subject[start:])
-
 	s.Lock()
 
 	var sfwc bool
 	var n *node[T]
 	l := s.root
 
-	for _, t := range tokens {
+	for t := range strings.SplitSeq(subject, tsep) {
 		lt := len(t)
 		if lt == 0 || sfwc {
 			s.Unlock()
@@ -251,7 +248,9 @@ func matchLevelForAny[T comparable](l *level[T], toks []string, np *int) bool {
 		if np != nil {
 			*np += len(n.subs)
 		}
-		return len(n.subs) > 0
+		if len(n.subs) > 0 {
+			return true
+		}
 	}
 	if pwc != nil {
 		if np != nil {
@@ -307,17 +306,6 @@ type lnt[T comparable] struct {
 
 // Raw low level remove, can do batches with lock held outside.
 func (s *GenericSublist[T]) remove(subject string, value T, shouldLock bool) error {
-	tsa := [32]string{}
-	tokens := tsa[:0]
-	start := 0
-	for i := 0; i < len(subject); i++ {
-		if subject[i] == btsep {
-			tokens = append(tokens, subject[start:i])
-			start = i + 1
-		}
-	}
-	tokens = append(tokens, subject[start:])
-
 	if shouldLock {
 		s.Lock()
 		defer s.Unlock()
@@ -331,7 +319,7 @@ func (s *GenericSublist[T]) remove(subject string, value T, shouldLock bool) err
 	var lnts [32]lnt[T]
 	levels := lnts[:0]
 
-	for _, t := range tokens {
+	for t := range strings.SplitSeq(subject, tsep) {
 		lt := len(t)
 		if lt == 0 || sfwc {
 			return ErrInvalidSubject
@@ -381,6 +369,36 @@ func (s *GenericSublist[T]) Remove(subject string, value T) error {
 	return s.remove(subject, value, true)
 }
 
+// HasInterestStartingIn is a helper for subject tree intersection.
+func (s *GenericSublist[T]) HasInterestStartingIn(subj string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	var _tokens [64]string
+	tokens := tokenizeSubjectIntoSlice(_tokens[:0], subj)
+	return hasInterestStartingIn(s.root, tokens)
+}
+
+func hasInterestStartingIn[T comparable](l *level[T], tokens []string) bool {
+	if l == nil {
+		return false
+	}
+	if len(tokens) == 0 {
+		return true
+	}
+	token := tokens[0]
+	if l.fwc != nil {
+		return true
+	}
+	found := false
+	if pwc := l.pwc; pwc != nil {
+		found = found || hasInterestStartingIn(pwc.next, tokens[1:])
+	}
+	if n := l.nodes[token]; n != nil {
+		found = found || hasInterestStartingIn(n.next, tokens[1:])
+	}
+	return found
+}
+
 // pruneNode is used to prune an empty node from the tree.
 func (l *level[T]) pruneNode(n *node[T], t string) {
 	if n == nil {
@@ -403,6 +421,9 @@ func (n *node[T]) isEmpty() bool {
 
 // Return the number of nodes for the given level.
 func (l *level[T]) numNodes() int {
+	if l == nil {
+		return 0
+	}
 	num := len(l.nodes)
 	if l.pwc != nil {
 		num++
@@ -471,76 +492,15 @@ func visitLevel[T comparable](l *level[T], depth int) int {
 	return maxDepth
 }
 
-// IntersectStree will match all items in the given subject tree that
-// have interest expressed in the given sublist. The callback will only be called
-// once for each subject, regardless of overlapping subscriptions in the sublist.
-func IntersectStree[T1 any, T2 comparable](st *stree.SubjectTree[T1], sl *GenericSublist[T2], cb func(subj []byte, entry *T1)) {
-	var _subj [255]byte
-	intersectStree(st, sl.root, _subj[:0], cb)
-}
-
-func intersectStree[T1 any, T2 comparable](st *stree.SubjectTree[T1], r *level[T2], subj []byte, cb func(subj []byte, entry *T1)) {
-	nsubj := subj
-	if len(nsubj) > 0 {
-		nsubj = append(subj, '.')
-	}
-	switch {
-	case r.fwc != nil:
-		// We've reached a full wildcard, do a FWC match on the stree at this point
-		// and don't keep iterating downward.
-		nsubj := append(nsubj, '>')
-		st.Match(nsubj, cb)
-	case r.pwc != nil:
-		// We've found a partial wildcard. We'll keep iterating downwards, but first
-		// check whether there's interest at this level (without triggering dupes) and
-		// match if so.
-		nsubj := append(nsubj, '*')
-		if len(r.pwc.subs) > 0 {
-			st.Match(nsubj, cb)
-		}
-		if r.pwc.next != nil && r.pwc.next.numNodes() > 0 {
-			intersectStree(st, r.pwc.next, nsubj, cb)
-		}
-	default:
-		// Normal node with subject literals, keep iterating.
-		for t, n := range r.nodes {
-			nsubj := append(nsubj, t...)
-			if len(n.subs) > 0 {
-				if subjectHasWildcard(bytesToString(nsubj)) {
-					st.Match(nsubj, cb)
-				} else {
-					if e, ok := st.Find(nsubj); ok {
-						cb(nsubj, e)
-					}
-				}
-			}
-			if n.next != nil && n.next.numNodes() > 0 {
-				intersectStree(st, n.next, nsubj, cb)
-			}
+// use similar to append. meaning, the updated slice will be returned
+func tokenizeSubjectIntoSlice(tts []string, subject string) []string {
+	start := 0
+	for i := 0; i < len(subject); i++ {
+		if subject[i] == btsep {
+			tts = append(tts, subject[start:i])
+			start = i + 1
 		}
 	}
-}
-
-// Determine if a subject has any wildcard tokens.
-func subjectHasWildcard(subject string) bool {
-	// This one exits earlier then !subjectIsLiteral(subject)
-	for i, c := range subject {
-		if c == pwc || c == fwc {
-			if (i == 0 || subject[i-1] == btsep) &&
-				(i+1 == len(subject) || subject[i+1] == btsep) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Note this will avoid a copy of the data used for the string, but it will also reference the existing slice's data pointer.
-// So this should be used sparingly when we know the encompassing byte slice's lifetime is the same.
-func bytesToString(b []byte) string {
-	if len(b) == 0 {
-		return _EMPTY_
-	}
-	p := unsafe.SliceData(b)
-	return unsafe.String(p, len(b))
+	tts = append(tts, subject[start:])
+	return tts
 }

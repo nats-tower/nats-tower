@@ -400,10 +400,17 @@ type GatewayStat struct {
 	NumInbound int       `json:"inbound_connections"`
 }
 
-// DataStats reports how may msg and bytes. Applicable for both sent and received.
-type DataStats struct {
+type MsgBytes struct {
 	Msgs  int64 `json:"msgs"`
 	Bytes int64 `json:"bytes"`
+}
+
+// DataStats reports how may msg and bytes. Applicable for both sent and received.
+type DataStats struct {
+	MsgBytes
+	Gateways *MsgBytes `json:"gateways,omitempty"`
+	Routes   *MsgBytes `json:"routes,omitempty"`
+	Leafs    *MsgBytes `json:"leafs,omitempty"`
 }
 
 // Used for internally queueing up messages that the server wants to send.
@@ -412,7 +419,7 @@ type pubMsg struct {
 	sub  string
 	rply string
 	si   *ServerInfo
-	hdr  map[string]string
+	hdr  []byte
 	msg  any
 	oct  compressionType
 	echo bool
@@ -421,7 +428,7 @@ type pubMsg struct {
 
 var pubMsgPool sync.Pool
 
-func newPubMsg(c *client, sub, rply string, si *ServerInfo, hdr map[string]string,
+func newPubMsg(c *client, sub, rply string, si *ServerInfo, hdr []byte,
 	msg any, oct compressionType, echo, last bool) *pubMsg {
 
 	var m *pubMsg
@@ -594,17 +601,28 @@ RESET:
 				// Add in NL
 				b = append(b, _CRLF_...)
 
+				// Optional raw header addition.
+				if pm.hdr != nil {
+					b = append(pm.hdr, b...)
+					nhdr := len(pm.hdr)
+					nsize := len(b) - LEN_CR_LF
+					// MQTT producers don't have CRLF, so add it back.
+					if c.isMqtt() {
+						nsize += LEN_CR_LF
+					}
+					// Update pubArgs
+					// If others will use this later we need to save and restore original.
+					c.pa.hdr = nhdr
+					c.pa.size = nsize
+					c.pa.hdb = []byte(strconv.Itoa(nhdr))
+					c.pa.szb = []byte(strconv.Itoa(nsize))
+				}
+
 				// Check if we should set content-encoding
 				if contentHeader != _EMPTY_ {
 					b = c.setHeader(contentEncodingHeader, contentHeader, b)
 				}
 
-				// Optional header processing.
-				if pm.hdr != nil {
-					for k, v := range pm.hdr {
-						b = c.setHeader(k, v, b)
-					}
-				}
 				// Tracing
 				if trace {
 					c.traceInOp(fmt.Sprintf("PUB %s %s %d", c.pa.subject, c.pa.reply, c.pa.size), nil)
@@ -681,7 +699,7 @@ func (s *Server) sendInternalAccountMsg(a *Account, subject string, msg any) err
 }
 
 // Used to send an internal message with an optional reply to an arbitrary account.
-func (s *Server) sendInternalAccountMsgWithReply(a *Account, subject, reply string, hdr map[string]string, msg any, echo bool) error {
+func (s *Server) sendInternalAccountMsgWithReply(a *Account, subject, reply string, hdr []byte, msg any, echo bool) error {
 	s.mu.RLock()
 	if s.sys == nil || s.sys.sendq == nil {
 		s.mu.RUnlock()
@@ -842,12 +860,16 @@ func routeStat(r *client) *RouteStat {
 	rs := &RouteStat{
 		ID: r.cid,
 		Sent: DataStats{
-			Msgs:  r.outMsgs,
-			Bytes: r.outBytes,
+			MsgBytes: MsgBytes{
+				Msgs:  r.outMsgs,
+				Bytes: r.outBytes,
+			},
 		},
 		Received: DataStats{
-			Msgs:  atomic.LoadInt64(&r.inMsgs),
-			Bytes: atomic.LoadInt64(&r.inBytes),
+			MsgBytes: MsgBytes{
+				Msgs:  atomic.LoadInt64(&r.inMsgs),
+				Bytes: atomic.LoadInt64(&r.inBytes),
+			},
 		},
 		Pending: int(r.out.pb),
 	}
@@ -946,8 +968,10 @@ func (s *Server) sendStatsz(subj string) {
 			// Note that *client.out[Msgs|Bytes] are not set using atomic,
 			// unlike the in[Msgs|bytes].
 			gs.Sent = DataStats{
-				Msgs:  c.outMsgs,
-				Bytes: c.outBytes,
+				MsgBytes: MsgBytes{
+					Msgs:  c.outMsgs,
+					Bytes: c.outBytes,
+				},
 			}
 			c.mu.Unlock()
 			// Gather matching inbound connections
@@ -1388,10 +1412,9 @@ func (s *Server) initEventTracking() {
 		}
 	}
 
-	// User info.
-	// TODO(dlc) - Can be internal and not forwarded since bound server for the client connection
-	// is only one that will answer. This breaks tests since we still forward on remote server connect.
-	if _, err := s.sysSubscribe(fmt.Sprintf(userDirectReqSubj, "*"), s.userInfoReq); err != nil {
+	// User info. Do not propagate interest so that we know the local server to the connection
+	// is the only one that will answer the requests.
+	if _, err := s.sysSubscribeInternal(fmt.Sprintf(userDirectReqSubj, "*"), s.userInfoReq); err != nil {
 		s.Errorf("Error setting up internal tracking: %v", err)
 		return
 	}
@@ -1695,18 +1718,18 @@ func (s *Server) remoteServerUpdate(sub *subscription, c *client, _ *Account, su
 	node := getHash(si.Name)
 	accountNRG := si.AccountNRG()
 	oldInfo, _ := s.nodeToInfo.Swap(node, nodeInfo{
-		si.Name,
-		si.Version,
-		si.Cluster,
-		si.Domain,
-		si.ID,
-		si.Tags,
-		cfg,
-		stats,
-		false,
-		si.JetStreamEnabled(),
-		si.BinaryStreamSnapshot(),
-		accountNRG,
+		name:            si.Name,
+		version:         si.Version,
+		cluster:         si.Cluster,
+		domain:          si.Domain,
+		id:              si.ID,
+		tags:            si.Tags,
+		cfg:             cfg,
+		stats:           stats,
+		offline:         false,
+		js:              si.JetStreamEnabled(),
+		binarySnapshots: si.BinaryStreamSnapshot(),
+		accountNRG:      accountNRG,
 	})
 	if oldInfo == nil || accountNRG != oldInfo.(nodeInfo).accountNRG {
 		// One of the servers we received statsz from changed its mind about
@@ -1749,18 +1772,18 @@ func (s *Server) processNewServer(si *ServerInfo) {
 		// Only update if non-existent
 		if _, ok := s.nodeToInfo.Load(node); !ok {
 			s.nodeToInfo.Store(node, nodeInfo{
-				si.Name,
-				si.Version,
-				si.Cluster,
-				si.Domain,
-				si.ID,
-				si.Tags,
-				nil,
-				nil,
-				false,
-				si.JetStreamEnabled(),
-				si.BinaryStreamSnapshot(),
-				si.AccountNRG(),
+				name:            si.Name,
+				version:         si.Version,
+				cluster:         si.Cluster,
+				domain:          si.Domain,
+				id:              si.ID,
+				tags:            si.Tags,
+				cfg:             nil,
+				stats:           nil,
+				offline:         false,
+				js:              si.JetStreamEnabled(),
+				binarySnapshots: si.BinaryStreamSnapshot(),
+				accountNRG:      si.AccountNRG(),
 			})
 		}
 	}
@@ -2402,22 +2425,57 @@ func (s *Server) sendAccConnsUpdate(a *Account, subj ...string) {
 func (a *Account) statz() *AccountStat {
 	localConns := a.numLocalConnections()
 	leafConns := a.numLocalLeafNodes()
+
+	a.stats.Lock()
+	received := DataStats{
+		MsgBytes: MsgBytes{
+			Msgs:  a.stats.inMsgs,
+			Bytes: a.stats.inBytes,
+		},
+		Gateways: &MsgBytes{
+			Msgs:  a.stats.gw.inMsgs,
+			Bytes: a.stats.gw.inBytes,
+		},
+		Routes: &MsgBytes{
+			Msgs:  a.stats.rt.inMsgs,
+			Bytes: a.stats.rt.inBytes,
+		},
+		Leafs: &MsgBytes{
+			Msgs:  a.stats.ln.inMsgs,
+			Bytes: a.stats.ln.inBytes,
+		},
+	}
+	sent := DataStats{
+		MsgBytes: MsgBytes{
+			Msgs:  a.stats.outMsgs,
+			Bytes: a.stats.outBytes,
+		},
+		Gateways: &MsgBytes{
+			Msgs:  a.stats.gw.outMsgs,
+			Bytes: a.stats.gw.outBytes,
+		},
+		Routes: &MsgBytes{
+			Msgs:  a.stats.rt.outMsgs,
+			Bytes: a.stats.rt.outBytes,
+		},
+		Leafs: &MsgBytes{
+			Msgs:  a.stats.ln.outMsgs,
+			Bytes: a.stats.ln.outBytes,
+		},
+	}
+	slowConsumers := a.stats.slowConsumers
+	a.stats.Unlock()
+
 	return &AccountStat{
-		Account:    a.Name,
-		Name:       a.getNameTagLocked(),
-		Conns:      localConns,
-		LeafNodes:  leafConns,
-		TotalConns: localConns + leafConns,
-		NumSubs:    a.sl.Count(),
-		Received: DataStats{
-			Msgs:  atomic.LoadInt64(&a.inMsgs),
-			Bytes: atomic.LoadInt64(&a.inBytes),
-		},
-		Sent: DataStats{
-			Msgs:  atomic.LoadInt64(&a.outMsgs),
-			Bytes: atomic.LoadInt64(&a.outBytes),
-		},
-		SlowConsumers: atomic.LoadInt64(&a.slowConsumers),
+		Account:       a.Name,
+		Name:          a.getNameTagLocked(),
+		Conns:         localConns,
+		LeafNodes:     leafConns,
+		TotalConns:    localConns + leafConns,
+		NumSubs:       a.sl.Count(),
+		Received:      received,
+		Sent:          sent,
+		SlowConsumers: slowConsumers,
 	}
 }
 
@@ -2533,12 +2591,16 @@ func (s *Server) accountDisconnectEvent(c *client, now time.Time, reason string)
 			MQTTClient: c.getMQTTClientID(),
 		},
 		Sent: DataStats{
-			Msgs:  atomic.LoadInt64(&c.inMsgs),
-			Bytes: atomic.LoadInt64(&c.inBytes),
+			MsgBytes: MsgBytes{
+				Msgs:  atomic.LoadInt64(&c.inMsgs),
+				Bytes: atomic.LoadInt64(&c.inBytes),
+			},
 		},
 		Received: DataStats{
-			Msgs:  c.outMsgs,
-			Bytes: c.outBytes,
+			MsgBytes: MsgBytes{
+				Msgs:  c.outMsgs,
+				Bytes: c.outBytes,
+			},
 		},
 		Reason: reason,
 	}
@@ -2587,12 +2649,16 @@ func (s *Server) sendAuthErrorEvent(c *client) {
 			MQTTClient: c.getMQTTClientID(),
 		},
 		Sent: DataStats{
-			Msgs:  c.inMsgs,
-			Bytes: c.inBytes,
+			MsgBytes: MsgBytes{
+				Msgs:  c.inMsgs,
+				Bytes: c.inBytes,
+			},
 		},
 		Received: DataStats{
-			Msgs:  c.outMsgs,
-			Bytes: c.outBytes,
+			MsgBytes: MsgBytes{
+				Msgs:  c.outMsgs,
+				Bytes: c.outBytes,
+			},
 		},
 		Reason: AuthenticationViolation.String(),
 	}
@@ -2645,12 +2711,16 @@ func (s *Server) sendAccountAuthErrorEvent(c *client, acc *Account, reason strin
 			MQTTClient: c.getMQTTClientID(),
 		},
 		Sent: DataStats{
-			Msgs:  c.inMsgs,
-			Bytes: c.inBytes,
+			MsgBytes: MsgBytes{
+				Msgs:  c.inMsgs,
+				Bytes: c.inBytes,
+			},
 		},
 		Received: DataStats{
-			Msgs:  c.outMsgs,
-			Bytes: c.outBytes,
+			MsgBytes: MsgBytes{
+				Msgs:  c.outMsgs,
+				Bytes: c.outBytes,
+			},
 		},
 		Reason: reason,
 	}
@@ -2998,7 +3068,7 @@ func (s *Server) debugSubscribers(sub *subscription, c *client, _ *Account, subj
 	replySubj := s.newRespInbox()
 	// Store our handler.
 	s.sys.replies[replySubj] = func(sub *subscription, _ *client, _ *Account, subject, _ string, msg []byte) {
-		if n, err := strconv.Atoi(string(msg)); err == nil {
+		if n, err := strconv.ParseInt(string(msg), 10, 32); err == nil {
 			atomic.AddInt32(&nsubs, int32(n))
 		}
 		if atomic.AddInt32(&responses, 1) >= expected {

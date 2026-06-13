@@ -1,4 +1,4 @@
-// Copyright 2012-2024 The NATS Authors
+// Copyright 2012-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -207,6 +207,9 @@ var (
 
 	// ErrMinimumVersionRequired is returned when a connection is not at the minimum version required.
 	ErrMinimumVersionRequired = errors.New("minimum version required")
+	// ErrLeafNodeMinVersionRejected is the leafnode protocol error prefix used
+	// when rejecting a remote due to leafnodes.min_version.
+	ErrLeafNodeMinVersionRejected = errors.New("connection rejected since minimum version required is")
 
 	// ErrInvalidMappingDestination is used for all subject mapping destination errors
 	ErrInvalidMappingDestination = errors.New("invalid mapping destination")
