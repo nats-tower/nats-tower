@@ -22,15 +22,15 @@ export function InstallationTeamInfo({
 
 	return (
 		<Card className="w-full">
-			<CardHeader className="text-gray-500">Teams</CardHeader>
+			<CardHeader className="text-muted-foreground">Teams</CardHeader>
 			<CardContent>
 				{pb.authStore.isSuperuser ? (
-					<div className="text-gray-500 text-sm">
+					<div className="text-muted-foreground text-sm">
 						Add teams to give specific access to this installation. Remove all
 						teams from this list to grant every team access.
 					</div>
 				) : (
-					<div className="text-gray-500 text-sm">
+					<div className="text-muted-foreground text-sm">
 						Teams listed here have access to this installation. An empty list
 						means that every team has access.
 					</div>

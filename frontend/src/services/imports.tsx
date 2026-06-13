@@ -6,7 +6,7 @@ export interface AccountImportList {
 	imports: AccountImport[];
 }
 
-export function getAccountImports(installationId: string, accountId: string) {
+export function useAccountImports(installationId: string, accountId: string) {
 	return useSWR(
 		[`/installations/${installationId}/accounts/${accountId}/imports`, installationId, accountId],
 		async ([_, pInstallationId, pAccountId]) => {
@@ -21,8 +21,7 @@ export function getAccountImports(installationId: string, accountId: string) {
 					},
 				)
 				.then((res) => {
-					let imports: AccountImport[] = [];
-					imports = res.imports.map((importItem) => {
+					const imports: AccountImport[] = res.imports.map((importItem) => {
 						return {
 							name: importItem.name,
                             subject: importItem.subject,

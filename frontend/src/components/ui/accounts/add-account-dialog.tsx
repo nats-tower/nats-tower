@@ -33,19 +33,19 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { MultiSelect } from "@/components/ui/multi-select-dialog";
-import { getTeams } from "@/services/teams";
-import { getInstallationLimits } from "@/services/limits";
+import { useTeams } from "@/services/teams";
+import { useInstallationLimits } from "@/services/limits";
 import type { ExpandedNatsAuthOperatorsResponse } from "@/lib/expanded-pocketbase-types";
 
 const FormSchema = z.object({
 	name: z
 		.string({
-			required_error: "Please provide a name for the account.",
+			error: "Please provide a name for the account.",
 		})
 		.min(1, "Name is required"),
 	description: z
 		.string({
-			required_error: "Please provide a description for the account.",
+			error: "Please provide a description for the account.",
 		})
 		.min(1, "Description is required"),
 	limits: z.string().optional(),
@@ -71,13 +71,13 @@ export function AddAccountDialogContent({
 		data: limitsData,
 		error: limitsError,
 		isLoading: limitsLoading,
-	} = getInstallationLimits(installationData.id);
+	} = useInstallationLimits(installationData.id);
 
 	const {
 		data: teamsData,
 		error: teamsError,
 		isLoading: teamsLoading,
-	} = getTeams();
+	} = useTeams();
 
 	if (limitsError) {
 		return <div>Failed to load limits</div>;

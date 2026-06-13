@@ -32,7 +32,7 @@ import {
 	DialogTitle,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { getBuildInfo } from "@/services/buildinfo";
+import { useBuildInfo } from "@/services/buildinfo";
 
 export function NavUser() {
 	const { isMobile } = useSidebar();
@@ -43,7 +43,7 @@ export function NavUser() {
 		data: buildInfoData,
 		error: buildInfoError,
 		isLoading: buildInfoLoading,
-	} = getBuildInfo();
+	} = useBuildInfo();
 
 	if (buildInfoError) return <div>failed to load</div>;
 	if (buildInfoLoading) {
@@ -109,7 +109,7 @@ export function NavUser() {
 						</SidebarMenuButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
-						className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+						className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
 						side={isMobile ? "bottom" : "right"}
 						align="end"
 						sideOffset={4}

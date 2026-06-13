@@ -10,15 +10,15 @@ import (
 )
 
 const (
-	expectedDriverVersion = "v1.37.0"
-	expectedLibcVersion   = "v1.62.1"
+	expectedDriverVersion = "v1.52.0"
+	expectedLibcVersion   = "v1.72.3"
 
 	// ModerncDepsCheckHookId is the id of the hook that performs the modernc.org/* deps checks.
 	// It could be used for removing/unbinding the hook if you don't want the checks.
 	ModerncDepsCheckHookId = "pbModerncDepsCheck"
 )
 
-// checkModerncDeps checks whether the current binary was buit with the
+// checkModerncDeps checks whether the current binary was built with the
 // expected and tested modernc driver dependencies.
 //
 // This is needed because modernc.org/libc doesn't follow semantic versioning

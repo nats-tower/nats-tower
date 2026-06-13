@@ -12,7 +12,7 @@ This template provides a minimal setup to get started with PocketBase.
 - [TypeScript](https://www.typescriptlang.org/) - A typed superset of JavaScript
 - [PocketBase Typegen](https://github.com/patmood/pocketbase-typegen) - A tool to generate TypeScript types for PocketBase
 - [Vite](https://vitejs.dev/) - A fast frontend build tool
-- [pnpm](https://pnpm.io/) - A fast, disk space efficient package manager
+- [Bun](https://bun.sh/) - A fast all-in-one JavaScript runtime & package manager
 
 ## 🚀 Getting Started
 
@@ -27,17 +27,17 @@ as a zip file and start from there.
 
 Install the dependencies
 
-> Note: we use `pnpm` as package manager, check how to install it [here](https://pnpm.io/installation).
+> Note: we use `bun` as package manager, check how to install it [here](https://bun.sh/docs/installation).
 
 ```bash
-pnpm install
+bun install
 ```
 
 Run the frontend server, this will start the development server and automatically refresh
 the browser when you make changes:
 
 ```bash
-pnpm dev
+bun run --bun dev
 ```
 
 ### Setup PocketBase
@@ -48,7 +48,7 @@ Download PocketBase binary:
 > is platform-specific and must be downloaded directly from Github.
 
 ```bash
-pnpm pb:download
+bun run pb:download
 ```
 
 The above script should work on most platforms, if it doesn't work for you, you can download the binary manually from [Github](https://github.com/pocketbase/pocketbase/releases) and place it in the folder `<project-root>/pocketbase/`
@@ -56,7 +56,7 @@ The above script should work on most platforms, if it doesn't work for you, you 
 Run PocketBase:
 
 ```bash
-pnpm pb:server
+bun run pb:serve
 ```
 
 ### PocketBase typings
@@ -67,7 +67,7 @@ but it's recommended to have them as it makes your frontend code more type-safe.
 To generate the typings run the following command after changing the PocketBase schema (adding collections, fields, etc):
 
 ```bash
-pnpm run pb:typegen
+bun run pb:typegen
 ```
 
 ## 📖 How to use this template

@@ -34,24 +34,24 @@ import {
     Form,
 } from "../form";
 import { Input } from "../input";
-import { getAccountImports, upsertAccountImport } from "@/services/imports";
+import { useAccountImports, upsertAccountImport } from "@/services/imports";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { z } from "zod";
-import { getAvailableExports } from "@/services/exports";
-import { getInstallationById } from "@/services/installations";
-import { getAccountById } from "@/services/accounts";
+import { useAvailableExports } from "@/services/exports";
+import { useInstallationById } from "@/services/installations";
+import { useAccountById } from "@/services/accounts";
 import type { AccountExport } from "@/lib/expanded-pocketbase-types";
 import { useForm } from "react-hook-form";
 
 const FormSchema = z.object({
 	name: z
 		.string({
-			required_error: "Please provide a name for the import.",
+			error: "Please provide a name for the import.",
 		})
 		.min(1, "Name is required"),
 	source_index: z.string({
-		required_error: "Please provide a source for the import.",
+		error: "Please provide a source for the import.",
 	}).min(1, "Source is required"),
 	local_subject: z.string().optional(),
 });
@@ -84,25 +84,25 @@ export function AddImportDialog({
 		data: installationData,
 		error: installationError,
 		isLoading: installationLoading,
-	} = getInstallationById(installationId);
+	} = useInstallationById(installationId);
 
 	const {
 		data: accountData,
 		error: accountError,
 		isLoading: accountLoading,
-	} = getAccountById(installationId, accountId);
+	} = useAccountById(installationId, accountId);
 
 	const {
 		data: importData,
 		error: importError,
 		isLoading: importLoading,
-	} = getAccountImports(installationId, accountId);
+	} = useAccountImports(installationId, accountId);
 
 	const {
 		data: availableExportsData,
 		error: availableExportsError,
 		isLoading: availableExportsLoading,
-	} = getAvailableExports(installationId, accountId);
+	} = useAvailableExports(installationId, accountId);
 
 	if (installationError || accountError || importError || availableExportsError)
 		return <div>failed to load</div>;

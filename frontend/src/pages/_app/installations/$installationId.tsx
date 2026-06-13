@@ -6,10 +6,16 @@ import type {
 import { useInstallation } from "@/lib/preferences";
 import { createFileRoute } from "@tanstack/react-router";
 import useSWR from "swr";
-import { CopyIcon, GearIcon } from "@radix-ui/react-icons";
+import {
+	CopyIcon,
+	GearIcon,
+	GlobeIcon,
+	IdCardIcon,
+} from "@radix-ui/react-icons";
 import { ClusterInfo } from "@/components/ui/cluster-info";
 import { Separator } from "@radix-ui/react-separator";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
 	Dialog,
 	DialogTrigger,
@@ -23,7 +29,7 @@ import {
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { InstallationTeamInfo } from "@/components/ui/installation-team-info/installation-team-info";
-import { getInstallationByIdWithTeams } from "@/services/installations";
+import { useInstallationByIdWithTeams } from "@/services/installations";
 import React from "react";
 
 export const Route = createFileRoute("/_app/installations/$installationId")({
@@ -34,7 +40,7 @@ function Installation() {
 	const { installationId } = Route.useParams();
 	const installationPref = useInstallation();
 	const { data, error, isLoading, mutate } =
-		getInstallationByIdWithTeams(installationId);
+		useInstallationByIdWithTeams(installationId);
 
 	// Update default installationId in user preferences
 	// this will automatically select the installation on login
@@ -100,7 +106,7 @@ resolver_preload = {
 		return <div>Loading...</div>;
 	}
 
-	if (error) {
+	if (error && !data) {
 		return <div>Error loading installation details.</div>;
 	}
 
@@ -110,197 +116,142 @@ resolver_preload = {
 				<div className="mb-6">
 					<div className="flex items-center">
 						<div className="flex-1">
-							<h2 className="text-2xl font-bold">Dashboard</h2>
-							<div className="text-sm text-gray-500">Overview</div>
+							<h2 className="text-2xl font-bold tracking-tight">
+								{data?.description || "Dashboard"}
+							</h2>
+							<div className="text-sm text-muted-foreground">
+								Installation overview
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 			<div className="py-4">
 				<div className="container mx-auto">
-					<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-						<div className="col-span-1 lg:col-span-12">
-							<div className="bg-white rounded-lg shadow">
-								<div className="p-4">
-									<div className="flex items-center">
-										<div className="flex-1">
-											<div className="text-sm text-gray-500">URL</div>
-											<div
-												className="text-xl font-semibold"
-												id="installation-url"
-											>
-												{data?.url}
-											</div>
+					<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+						<Card>
+							<CardContent className="p-4">
+								<div className="flex items-center gap-3">
+									<span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<GlobeIcon className="size-4" />
+									</span>
+									<div className="min-w-0 flex-1">
+										<div className="text-sm font-medium text-muted-foreground">
+											URL
 										</div>
-										<div className="ml-2">
-											<Button
-												variant="outline"
-												onClick={() => {
-													handleCopy(
-														data?.url,
-														"Installation URL copied to clipboard.",
-													);
-												}}
-											>
-												<CopyIcon />
-											</Button>
+										<div
+											className="truncate text-lg font-semibold"
+											id="installation-url"
+										>
+											{data?.url}
 										</div>
+									</div>
+									<div className="ml-auto flex items-center gap-2">
+										<Button
+											variant="outline"
+											size="icon"
+											onClick={() => {
+												handleCopy(
+													data?.url,
+													"Installation URL copied to clipboard.",
+												);
+											}}
+										>
+											<CopyIcon />
+										</Button>
 
 										{pb.authStore.isSuperuser ? (
-											<div className="ml-2">
-												<Dialog>
-													<DialogTrigger asChild>
-														<Button variant="outline">
-															<GearIcon />
+											<Dialog>
+												<DialogTrigger asChild>
+													<Button variant="outline" size="icon">
+														<GearIcon />
+													</Button>
+												</DialogTrigger>
+												<DialogContent className="sm:max-w-md">
+													<DialogHeader>
+														<DialogTitle>
+															Settings for installation '{data?.description}'
+														</DialogTitle>
+														<DialogDescription>{data?.url}</DialogDescription>
+													</DialogHeader>
+													<p className="text-sm text-muted-foreground">
+														Use the following NATS config snippet to manage
+														NATS servers via NATS Tower.
+													</p>
+													{data && sysAccount.data ? (
+														<Textarea
+															value={getNATSSettings(data, sysAccount.data)}
+															readOnly
+															className="mb-4 h-96 bg-slate-950 text-white"
+														/>
+													) : undefined}
+													<DialogFooter className="justify-end mt-2">
+														<Button
+															onClick={() => {
+																if (data && sysAccount.data) {
+																	handleCopySettings(
+																		getNATSSettings(data, sysAccount.data),
+																	);
+																}
+															}}
+														>
+															Copy as NATS Config
 														</Button>
-													</DialogTrigger>
-													<DialogContent className="sm:max-w-md">
-														<DialogHeader>
-															<DialogTitle>
-																Settings for installation '{data?.description}'
-															</DialogTitle>
-															<DialogDescription>{data?.url}</DialogDescription>
-														</DialogHeader>
-														<p className="text-sm text-gray-500">
-															Use the following NATS config snippet to manage
-															NATS servers via NATS Tower.
-														</p>
-														{data && sysAccount.data ? (
-															<Textarea
-																value={getNATSSettings(data, sysAccount.data)}
-																readOnly
-																className="mb-4 h-96 bg-slate-950 text-white"
-															/>
-														) : undefined}
-														<DialogFooter className="justify-end mt-2">
-															<Button
-																onClick={() => {
-																	if (data && sysAccount.data) {
-																		handleCopySettings(
-																			getNATSSettings(data, sysAccount.data),
-																		);
-																	}
-																}}
-															>
-																Copy as NATS Config
+														<Button
+															onClick={() => {
+																if (data && sysAccount.data) {
+																	handleCopySettings(
+																		getYamlSettings(data, sysAccount.data),
+																	);
+																}
+															}}
+														>
+															Copy as Yaml
+														</Button>
+														<DialogClose asChild>
+															<Button type="button" variant="secondary">
+																Close
 															</Button>
-															<Button
-																onClick={() => {
-																	if (data && sysAccount.data) {
-																		handleCopySettings(
-																			getYamlSettings(data, sysAccount.data),
-																		);
-																	}
-																}}
-															>
-																Copy as Yaml
-															</Button>
-															<DialogClose asChild>
-																<Button type="button" variant="secondary">
-																	Close
-																</Button>
-															</DialogClose>
-														</DialogFooter>
-													</DialogContent>
-												</Dialog>
-											</div>
+														</DialogClose>
+													</DialogFooter>
+												</DialogContent>
+											</Dialog>
 										) : undefined}
 									</div>
 								</div>
-							</div>
-						</div>
-					</div>
+							</CardContent>
+						</Card>
 
-					<Separator orientation="horizontal" className="my-6" />
-
-					<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-						<div className="col-span-1 lg:col-span-12">
-							<div className="bg-white rounded-lg shadow">
-								<div className="p-4">
-									<div className="flex items-center">
-										<div className="flex-1">
-											<div className="text-sm text-gray-500">Identifier</div>
-											<div className="text-m font-semibold">
-												{data?.public_key}
-											</div>
+						<Card>
+							<CardContent className="p-4">
+								<div className="flex items-center gap-3">
+									<span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<IdCardIcon className="size-4" />
+									</span>
+									<div className="min-w-0 flex-1">
+										<div className="text-sm font-medium text-muted-foreground">
+											Identifier
 										</div>
-										<div className="ml-2">
-											<Button
-												variant="outline"
-												onClick={() => {
-													handleCopy(
-														data?.public_key,
-														"Identifier copied to clipboard",
-													);
-												}}
-											>
-												<CopyIcon />
-											</Button>
+										<div className="truncate font-mono text-sm font-semibold">
+											{data?.public_key}
 										</div>
-
-										{pb.authStore.isSuperuser ? (
-											<div className="ml-2">
-												<Dialog>
-													<DialogTrigger asChild>
-														<Button variant="outline">
-															<GearIcon />
-														</Button>
-													</DialogTrigger>
-													<DialogContent className="sm:max-w-md">
-														<DialogHeader>
-															<DialogTitle>
-																Settings for installation '{data?.description}'
-															</DialogTitle>
-															<DialogDescription>{data?.url}</DialogDescription>
-														</DialogHeader>
-														<p className="text-sm text-gray-500">
-															Use the following NATS config snippet to manage
-															NATS servers via NATS Tower.
-														</p>
-														{data && sysAccount.data ? (
-															<Textarea
-																value={getNATSSettings(data, sysAccount.data)}
-																readOnly
-																className="mb-4 h-96 bg-slate-950 text-white"
-															/>
-														) : undefined}
-														<DialogFooter className="justify-end mt-2">
-															<Button
-																onClick={() => {
-																	if (data && sysAccount.data) {
-																		handleCopySettings(
-																			getNATSSettings(data, sysAccount.data),
-																		);
-																	}
-																}}
-															>
-																Copy as NATS Config
-															</Button>
-															<Button
-																onClick={() => {
-																	if (data && sysAccount.data) {
-																		handleCopySettings(
-																			getYamlSettings(data, sysAccount.data),
-																		);
-																	}
-																}}
-															>
-																Copy as Yaml
-															</Button>
-															<DialogClose asChild>
-																<Button type="button" variant="secondary">
-																	Close
-																</Button>
-															</DialogClose>
-														</DialogFooter>
-													</DialogContent>
-												</Dialog>
-											</div>
-										) : undefined}
 									</div>
+									<Button
+										variant="outline"
+										size="icon"
+										className="ml-auto"
+										onClick={() => {
+											handleCopy(
+												data?.public_key,
+												"Identifier copied to clipboard",
+											);
+										}}
+									>
+										<CopyIcon />
+									</Button>
 								</div>
-							</div>
-						</div>
+							</CardContent>
+						</Card>
 					</div>
 
 					<Separator orientation="horizontal" className="my-6" />
@@ -317,3 +268,4 @@ resolver_preload = {
 		</div>
 	);
 }
+

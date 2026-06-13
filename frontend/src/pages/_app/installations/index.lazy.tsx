@@ -9,7 +9,7 @@ import {
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
 
-import { getInstallations } from "@/services/installations";
+import { useInstallations } from "@/services/installations";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { AddInstallationDialogContent } from "@/components/ui/installations/add-installation-dialog";
 import { useState } from "react";
@@ -24,7 +24,7 @@ function Installations() {
 	const [dialogCreateInstallationOpen, setDialogCreateInstallationOpen] =
 		useState(false);
 
-	const { data, error, isLoading, mutate } = getInstallations();
+	const { data, error, isLoading, mutate } = useInstallations();
 
 	if (error) return <div>failed to load</div>;
 	if (isLoading) return <div>loading...</div>;

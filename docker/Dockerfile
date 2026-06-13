@@ -9,19 +9,19 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ gcc py3-setuptools
 
 # Install dependencies based on the preferred package manager
-COPY frontend/package.json frontend/yarn.lock* frontend/package-lock.json* frontend/pnpm-lock.yaml* ./
+COPY frontend/package.json frontend/bun.lock* ./
 
 RUN ls
 
-RUN corepack enable pnpm && pnpm i --frozen-lockfile; 
+RUN npm install -g bun && bun install --frozen-lockfile; 
 
 # The actual app code
 COPY frontend/ ./
-RUN corepack enable pnpm && pnpm run build --outDir /pb/pb_public;
+RUN bun run build --outDir /pb/pb_public;
 
 
 # build backend
-FROM golang:1.24-alpine AS build
+FROM golang:1.26-alpine AS build
 
 RUN apk add --no-cache git
 

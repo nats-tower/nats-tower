@@ -16,7 +16,7 @@ import {
 	CommandList,
 } from "../command";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
-import { getTeams } from "@/services/teams";
+import { useTeams } from "@/services/teams";
 
 interface TeamListAddButtonProps {
 	installation: NatsAuthOperatorsRecord;
@@ -29,7 +29,7 @@ export function TeamListAddButton({
 	assignedTeams,
 	refresh,
 }: TeamListAddButtonProps) {
-	const { data, error, isLoading } = getTeams();
+	const { data, error, isLoading } = useTeams();
 
 	if (isLoading) {
 		return <div>Loading...</div>;

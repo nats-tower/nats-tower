@@ -2,14 +2,94 @@ package natsauth
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	jwt "github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
+
+// decodeAccountClaimsResilient decodes account claims, repairing a known
+// corruption where scoped signing keys were serialized with a numeric "kind"
+// (e.g. "kind":1) instead of the expected "kind":"user_scope". Such JWTs were
+// produced by an earlier bug and can no longer be decoded by the jwt library.
+func decodeAccountClaimsResilient(token string) (*jwt.AccountClaims, error) {
+	claims, err := jwt.DecodeAccountClaims(token)
+	if err == nil {
+		return claims, nil
+	}
+
+	repaired, rerr := repairAccountClaimsToken(token)
+	if rerr != nil {
+		// Could not repair, surface the original decode error.
+		return nil, err
+	}
+	return repaired, nil
+}
+
+func repairAccountClaimsToken(token string) (*jwt.AccountClaims, error) {
+	chunks := strings.Split(token, ".")
+	if len(chunks) != 3 {
+		return nil, fmt.Errorf("invalid jwt: expected 3 chunks")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(chunks[1])
+	if err != nil {
+		return nil, err
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, err
+	}
+
+	nats, ok := raw["nats"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("jwt has no nats claims")
+	}
+
+	signingKeys, ok := nats["signing_keys"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("jwt has no scoped signing keys to repair")
+	}
+
+	repaired := false
+	for _, entry := range signingKeys {
+		obj, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		// A string "kind" is already valid; a numeric kind is the corruption.
+		if _, isString := obj["kind"].(string); isString {
+			continue
+		}
+		if _, hasKind := obj["kind"]; hasKind {
+			obj["kind"] = jwt.UserScopeType.String()
+			repaired = true
+		}
+	}
+
+	if !repaired {
+		return nil, fmt.Errorf("nothing to repair")
+	}
+
+	fixed, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	var claims jwt.AccountClaims
+	if err := json.Unmarshal(fixed, &claims); err != nil {
+		return nil, err
+	}
+	return &claims, nil
+}
 
 func stringSliceFromRecordField(value any) []string {
 	if value == nil {
@@ -20,19 +100,44 @@ func stringSliceFromRecordField(value any) []string {
 	case []string:
 		return v
 	case []any:
-		result := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok && s != "" {
-				result = append(result, s)
-			}
-		}
-		return result
+		return stringSliceFromAnySlice(v)
+	case string:
+		return stringSliceFromJSONBytes([]byte(v))
+	case []byte:
+		return stringSliceFromJSONBytes(v)
+	case json.RawMessage:
+		return stringSliceFromJSONBytes(v)
+	case types.JSONRaw:
+		return stringSliceFromJSONBytes(v)
 	default:
 		return nil
 	}
 }
 
-func buildUserScopeFromSigningKeyRecord(record *core.Record) jwt.UserScope {
+func stringSliceFromAnySlice(items []any) []string {
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok && s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+func stringSliceFromJSONBytes(data []byte) []string {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" || trimmed == "null" {
+		return nil
+	}
+
+	var items []any
+	if err := json.Unmarshal([]byte(trimmed), &items); err != nil {
+		return nil
+	}
+	return stringSliceFromAnySlice(items)
+}
+
+func buildUserScopeFromSigningKeyRecord(record *core.Record) *jwt.UserScope {
 	scope := jwt.NewUserScope()
 	scope.Key = record.GetString("public_key")
 	scope.Role = record.GetString("role")
@@ -47,7 +152,7 @@ func buildUserScopeFromSigningKeyRecord(record *core.Record) jwt.UserScope {
 		scope.Template.Permissions.Sub.Allow = subPerms
 	}
 
-	return *scope
+	return scope
 }
 
 func (m *NATSAuthModule) syncSigningKeyScopeToAccount(ctx context.Context,
@@ -73,7 +178,7 @@ func (m *NATSAuthModule) syncSigningKeyScopeToAccount(ctx context.Context,
 		return err
 	}
 
-	accountClaims, err := jwt.DecodeAccountClaims(accountRecord.GetString("jwt"))
+	accountClaims, err := decodeAccountClaimsResilient(accountRecord.GetString("jwt"))
 	if err != nil {
 		logger.ErrorContext(ctx, "Could not decode account claims", slog.String("error", err.Error()))
 		return err
@@ -125,7 +230,7 @@ func (m *NATSAuthModule) removeSigningKeyFromAccount(ctx context.Context,
 		return err
 	}
 
-	accountClaims, err := jwt.DecodeAccountClaims(accountRecord.GetString("jwt"))
+	accountClaims, err := decodeAccountClaimsResilient(accountRecord.GetString("jwt"))
 	if err != nil {
 		logger.ErrorContext(ctx, "Could not decode account claims", slog.String("error", err.Error()))
 		return err

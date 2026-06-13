@@ -1,10 +1,10 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { DataTable } from "@/components/ui/data-table";
-import { getAccountById } from "@/services/accounts";
-import { getInstallationById } from "@/services/installations";
+import { useAccountById } from "@/services/accounts";
+import { useInstallationById } from "@/services/installations";
 import { getImportColumns } from "@/components/ui/imports/imports-columns";
-import { getAccountImports } from "@/services/imports";
+import { useAccountImports } from "@/services/imports";
 import { AddImportDialog } from "@/components/ui/imports/add-import-dialog";
 
 export const Route = createLazyFileRoute(
@@ -21,20 +21,20 @@ function Imports() {
 		data: installationData,
 		error: installationError,
 		isLoading: installationLoading,
-	} = getInstallationById(installationId);
+	} = useInstallationById(installationId);
 
 	const {
 		data: accountData,
 		error: accountError,
 		isLoading: accountLoading,
-	} = getAccountById(installationId, accountId);
+	} = useAccountById(installationId, accountId);
 
 	const {
 		data: importData,
 		error: importError,
 		isLoading: importLoading,
 		mutate: mutateImports,
-	} = getAccountImports(installationId, accountId);
+	} = useAccountImports(installationId, accountId);
 
 	if (installationError || accountError || importError)
 		return <div>failed to load</div>;

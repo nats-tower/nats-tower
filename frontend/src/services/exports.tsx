@@ -6,7 +6,7 @@ export interface AccountExportList {
 	exports: AccountExport[];
 }
 
-export function getAccountExports(installationId: string, accountId: string) {
+export function useAccountExports(installationId: string, accountId: string) {
 	return useSWR(
 		[`/accounts/${accountId}/exports`, accountId],
 		async ([_, pAccountId]) => {
@@ -21,8 +21,7 @@ export function getAccountExports(installationId: string, accountId: string) {
 					},
 				)
 				.then((res) => {
-					let exports: AccountExport[] = [];
-					exports = res.exports.map((exportItem) => {
+					const exports: AccountExport[] = res.exports.map((exportItem) => {
 						return {
 							name: exportItem.name,
 							subject: exportItem.subject,
@@ -66,7 +65,7 @@ export function deleteAccountExport(
 	);
 }
 
-export function getAvailableExports(
+export function useAvailableExports(
 	installationId: string,
 	accountName: string,
 ) {

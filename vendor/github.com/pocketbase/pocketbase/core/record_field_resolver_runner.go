@@ -49,14 +49,13 @@ type runner struct {
 
 	// shared processing state
 	// ---------------------------------------------------------------
-	activeProps                []string            // holds the active props that remains to be processed
-	activeCollectionName       string              // the last used collection name
-	activeTableAlias           string              // the last used table alias
-	allowHiddenFields          bool                // indicates whether hidden fields (eg. email) should be allowed without extra conditions
-	nullifyMisingField         bool                // indicating whether to return null on missing field or return an error
-	withMultiMatch             bool                // indicates whether to attach a multiMatchSubquery condition to the ResolverResult
-	multiMatchActiveTableAlias string              // the last used multi-match table alias
-	multiMatch                 *multiMatchSubquery // the multi-match subquery expression generated from the fieldName
+	activeProps                []string                   // holds the active props that remains to be processed
+	activeCollectionName       string                     // the last used collection name
+	activeTableAlias           string                     // the last used table alias
+	nullifyMisingField         bool                       // indicating whether to return null on missing field or return an error
+	withMultiMatch             bool                       // indicates whether to attach a MultiMatchSubquery condition to the ResolverResult
+	multiMatchActiveTableAlias string                     // the last used multi-match table alias
+	multiMatch                 *search.MultiMatchSubquery // the multi-match subquery expression generated from the fieldName
 }
 
 func (r *runner) run() (*search.ResolverResult, error) {
@@ -81,6 +80,7 @@ func (r *runner) run() (*search.ResolverResult, error) {
 	}
 
 	if r.activeProps[0] == "@request" {
+		// @todo consider returning an error instead?
 		if r.resolver.requestInfo == nil {
 			return &search.ResolverResult{Identifier: "NULL"}, nil
 		}
@@ -89,7 +89,9 @@ func (r *runner) run() (*search.ResolverResult, error) {
 			return r.processRequestAuthField()
 		}
 
-		if strings.HasPrefix(r.fieldName, "@request.body.") && len(r.activeProps) > 2 {
+		totalProps := len(r.activeProps)
+
+		if strings.HasPrefix(r.fieldName, "@request.body.") && totalProps > 2 {
 			name, modifier, err := splitModifier(r.activeProps[2])
 			if err != nil {
 				return nil, err
@@ -101,23 +103,21 @@ func (r *runner) run() (*search.ResolverResult, error) {
 			}
 
 			// check for body relation field
-			if bodyField.Type() == FieldTypeRelation && len(r.activeProps) > 3 {
-				return r.processRequestInfoRelationField(bodyField)
+			if bodyField.Type() == FieldTypeRelation && totalProps > 3 {
+				return r.processRequestBodyRelationField(bodyField)
 			}
 
-			// check for body arrayble fields ":each" modifier
-			if modifier == eachModifier && len(r.activeProps) == 3 {
-				return r.processRequestInfoEachModifier(bodyField)
-			}
-
-			// check for body arrayble fields ":length" modifier
-			if modifier == lengthModifier && len(r.activeProps) == 3 {
-				return r.processRequestInfoLengthModifier(bodyField)
-			}
-
-			// check for body arrayble fields ":lower" modifier
-			if modifier == lowerModifier && len(r.activeProps) == 3 {
-				return r.processRequestInfoLowerModifier(bodyField)
+			if totalProps == 3 { // aka. last prop
+				switch modifier {
+				case eachModifier:
+					return r.processRequestBodyEachModifier(bodyField)
+				case lengthModifier:
+					return r.processRequestBodyLengthModifier(bodyField)
+				case lowerModifier:
+					return r.processRequestBodyLowerModifier(bodyField)
+				case changedModifier:
+					return r.processRequestBodyChangedModifier(bodyField)
+				}
 			}
 		}
 
@@ -133,12 +133,10 @@ func (r *runner) prepare() {
 	r.activeProps = strings.Split(r.fieldName, ".")
 
 	r.activeCollectionName = r.resolver.baseCollection.Name
-	r.activeTableAlias = inflector.Columnify(r.activeCollectionName)
-
-	r.allowHiddenFields = r.resolver.allowHiddenFields
-	// always allow hidden fields since the @.* filter is a system one
-	if r.activeProps[0] == "@collection" || r.activeProps[0] == "@request" {
-		r.allowHiddenFields = true
+	if r.resolver.baseCollectionAlias == "" {
+		r.activeTableAlias = inflector.Columnify(r.activeCollectionName)
+	} else {
+		r.activeTableAlias = r.resolver.baseCollectionAlias
 	}
 
 	// enable the ignore flag for missing @request.* fields for backward
@@ -146,13 +144,13 @@ func (r *runner) prepare() {
 	r.nullifyMisingField = r.activeProps[0] == "@request"
 
 	// prepare a multi-match subquery
-	r.multiMatch = &multiMatchSubquery{
-		baseTableAlias: r.activeTableAlias,
-		params:         dbx.Params{},
+	r.multiMatch = &search.MultiMatchSubquery{
+		TargetTableAlias: r.activeTableAlias,
+		Params:           dbx.Params{},
 	}
-	r.multiMatch.fromTableName = inflector.Columnify(r.activeCollectionName)
-	r.multiMatch.fromTableAlias = "__mm_" + r.activeTableAlias
-	r.multiMatchActiveTableAlias = r.multiMatch.fromTableAlias
+	r.multiMatch.FromTableName = inflector.Columnify(r.activeCollectionName)
+	r.multiMatch.FromTableAlias = "__mm_" + r.activeTableAlias
+	r.multiMatchActiveTableAlias = r.multiMatch.FromTableAlias
 	r.withMultiMatch = false
 }
 
@@ -172,21 +170,24 @@ func (r *runner) processCollectionField() (*search.ResolverResult, error) {
 	r.activeCollectionName = collection.Name
 
 	if len(collectionParts) == 2 && collectionParts[1] != "" {
-		r.activeTableAlias = inflector.Columnify("__collection_alias_" + collectionParts[1])
+		r.activeTableAlias = inflector.Columnify("__collection_alias_"+collectionParts[1]) + r.resolver.joinAliasSuffix
 	} else {
-		r.activeTableAlias = inflector.Columnify("__collection_" + r.activeCollectionName)
+		r.activeTableAlias = inflector.Columnify("__collection_"+r.activeCollectionName) + r.resolver.joinAliasSuffix
 	}
 
 	r.withMultiMatch = true
 
 	// join the collection to the main query
-	r.resolver.registerJoin(inflector.Columnify(collection.Name), r.activeTableAlias, nil)
+	err = r.resolver.registerJoin(inflector.Columnify(collection.Name), r.activeTableAlias, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	// join the collection to the multi-match subquery
-	r.multiMatchActiveTableAlias = "__mm" + r.activeTableAlias
-	r.multiMatch.joins = append(r.multiMatch.joins, &join{
-		tableName:  inflector.Columnify(collection.Name),
-		tableAlias: r.multiMatchActiveTableAlias,
+	r.multiMatchActiveTableAlias = "__mm_" + r.activeTableAlias
+	r.multiMatch.Joins = append(r.multiMatch.Joins, &search.Join{
+		TableName:  inflector.Columnify(collection.Name),
+		TableAlias: r.multiMatchActiveTableAlias,
 	})
 
 	// leave only the collection fields
@@ -212,10 +213,10 @@ func (r *runner) processRequestAuthField() (*search.ResolverResult, error) {
 	collection := r.resolver.requestInfo.Auth.Collection()
 
 	r.activeCollectionName = collection.Name
-	r.activeTableAlias = "__auth_" + inflector.Columnify(r.activeCollectionName)
+	r.activeTableAlias = "__auth_" + inflector.Columnify(r.activeCollectionName) + r.resolver.joinAliasSuffix
 
 	// join the auth collection to the main query
-	r.resolver.registerJoin(
+	err := r.resolver.registerJoin(
 		inflector.Columnify(r.activeCollectionName),
 		r.activeTableAlias,
 		dbx.HashExp{
@@ -223,15 +224,18 @@ func (r *runner) processRequestAuthField() (*search.ResolverResult, error) {
 			(r.activeTableAlias + ".id"): r.resolver.requestInfo.Auth.Id,
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	// join the auth collection to the multi-match subquery
 	r.multiMatchActiveTableAlias = "__mm_" + r.activeTableAlias
-	r.multiMatch.joins = append(
-		r.multiMatch.joins,
-		&join{
-			tableName:  inflector.Columnify(r.activeCollectionName),
-			tableAlias: r.multiMatchActiveTableAlias,
-			on: dbx.HashExp{
+	r.multiMatch.Joins = append(
+		r.multiMatch.Joins,
+		&search.Join{
+			TableName:  inflector.Columnify(r.activeCollectionName),
+			TableAlias: r.multiMatchActiveTableAlias,
+			On: dbx.HashExp{
 				(r.multiMatchActiveTableAlias + ".id"): r.resolver.requestInfo.Auth.Id,
 			},
 		},
@@ -268,10 +272,37 @@ func toSlice(value any) []any {
 	return result
 }
 
-func (r *runner) processRequestInfoLowerModifier(bodyField Field) (*search.ResolverResult, error) {
+func (r *runner) processRequestBodyChangedModifier(bodyField Field) (*search.ResolverResult, error) {
+	name := bodyField.GetName()
+
+	alias := search.FilterData(fmt.Sprintf("@request.body.%s:isset = true && @request.body.%s != %s", name, name, name))
+
+	aliasExpr, err := alias.BuildExpr(r.resolver)
+	if err != nil {
+		return nil, err
+	}
+
+	placeholder := "@changed@" + name + security.PseudorandomString(8)
+
+	result := &search.ResolverResult{
+		Identifier:   placeholder,
+		NullFallback: search.NullFallbackDisabled,
+		AfterBuild: func(expr dbx.Expression) dbx.Expression {
+			return &replaceWithExpression{
+				placeholder: placeholder,
+				old:         expr,
+				new:         aliasExpr,
+			}
+		},
+	}
+
+	return result, nil
+}
+
+func (r *runner) processRequestBodyLowerModifier(bodyField Field) (*search.ResolverResult, error) {
 	rawValue := cast.ToString(r.resolver.requestInfo.Body[bodyField.GetName()])
 
-	placeholder := "infoLower" + bodyField.GetName() + security.PseudorandomString(6)
+	placeholder := "infoLower" + bodyField.GetName() + security.PseudorandomString(8)
 
 	result := &search.ResolverResult{
 		Identifier: "LOWER({:" + placeholder + "})",
@@ -281,7 +312,7 @@ func (r *runner) processRequestInfoLowerModifier(bodyField Field) (*search.Resol
 	return result, nil
 }
 
-func (r *runner) processRequestInfoLengthModifier(bodyField Field) (*search.ResolverResult, error) {
+func (r *runner) processRequestBodyLengthModifier(bodyField Field) (*search.ResolverResult, error) {
 	if _, ok := bodyField.(MultiValuer); !ok {
 		return nil, fmt.Errorf("field %q doesn't support multivalue operations", bodyField.GetName())
 	}
@@ -295,7 +326,7 @@ func (r *runner) processRequestInfoLengthModifier(bodyField Field) (*search.Reso
 	return result, nil
 }
 
-func (r *runner) processRequestInfoEachModifier(bodyField Field) (*search.ResolverResult, error) {
+func (r *runner) processRequestBodyEachModifier(bodyField Field) (*search.ResolverResult, error) {
 	multiValuer, ok := bodyField.(MultiValuer)
 	if !ok {
 		return nil, fmt.Errorf("field %q doesn't support multivalue operations", bodyField.GetName())
@@ -307,11 +338,15 @@ func (r *runner) processRequestInfoEachModifier(bodyField Field) (*search.Resolv
 		return nil, fmt.Errorf("cannot serialize the data for field %q", r.activeProps[2])
 	}
 
-	placeholder := "dataEach" + security.PseudorandomString(6)
+	placeholder := "dataEach" + security.PseudorandomString(8)
 	cleanFieldName := inflector.Columnify(bodyField.GetName())
 	jeTable := fmt.Sprintf("json_each({:%s})", placeholder)
-	jeAlias := "__dataEach_" + cleanFieldName + "_je"
-	r.resolver.registerJoin(jeTable, jeAlias, nil)
+	jeAlias := "__dataEach_je_" + cleanFieldName + r.resolver.joinAliasSuffix
+
+	err = r.resolver.registerJoin(jeTable, jeAlias, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	result := &search.ResolverResult{
 		Identifier: fmt.Sprintf("[[%s.value]]", jeAlias),
@@ -325,14 +360,14 @@ func (r *runner) processRequestInfoEachModifier(bodyField Field) (*search.Resolv
 	if r.withMultiMatch {
 		placeholder2 := "mm" + placeholder
 		jeTable2 := fmt.Sprintf("json_each({:%s})", placeholder2)
-		jeAlias2 := "__mm" + jeAlias
+		jeAlias2 := "__mm_" + jeAlias
 
-		r.multiMatch.joins = append(r.multiMatch.joins, &join{
-			tableName:  jeTable2,
-			tableAlias: jeAlias2,
+		r.multiMatch.Joins = append(r.multiMatch.Joins, &search.Join{
+			TableName:  jeTable2,
+			TableAlias: jeAlias2,
 		})
-		r.multiMatch.params[placeholder2] = bodyItemsRaw
-		r.multiMatch.valueIdentifier = fmt.Sprintf("[[%s.value]]", jeAlias2)
+		r.multiMatch.Params[placeholder2] = bodyItemsRaw
+		r.multiMatch.ValueIdentifier = fmt.Sprintf("[[%s.value]]", jeAlias2)
 
 		result.MultiMatchSubQuery = r.multiMatch
 	}
@@ -340,7 +375,7 @@ func (r *runner) processRequestInfoEachModifier(bodyField Field) (*search.Resolv
 	return result, nil
 }
 
-func (r *runner) processRequestInfoRelationField(bodyField Field) (*search.ResolverResult, error) {
+func (r *runner) processRequestBodyRelationField(bodyField Field) (*search.ResolverResult, error) {
 	relField, ok := bodyField.(*RelationField)
 	if !ok {
 		return nil, fmt.Errorf("failed to initialize data relation field %q", bodyField.GetName())
@@ -360,10 +395,10 @@ func (r *runner) processRequestInfoRelationField(bodyField Field) (*search.Resol
 	}
 
 	r.activeCollectionName = dataRelCollection.Name
-	r.activeTableAlias = inflector.Columnify("__data_" + dataRelCollection.Name + "_" + relField.Name)
+	r.activeTableAlias = inflector.Columnify("__data_"+dataRelCollection.Name+"_"+relField.Name) + r.resolver.joinAliasSuffix
 
 	// join the data rel collection to the main collection
-	r.resolver.registerJoin(
+	err = r.resolver.registerJoin(
 		r.activeCollectionName,
 		r.activeTableAlias,
 		dbx.In(
@@ -371,19 +406,22 @@ func (r *runner) processRequestInfoRelationField(bodyField Field) (*search.Resol
 			list.ToInterfaceSlice(dataRelIds)...,
 		),
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	if relField.IsMultiple() {
 		r.withMultiMatch = true
 	}
 
 	// join the data rel collection to the multi-match subquery
-	r.multiMatchActiveTableAlias = inflector.Columnify("__data_mm_" + dataRelCollection.Name + "_" + relField.Name)
-	r.multiMatch.joins = append(
-		r.multiMatch.joins,
-		&join{
-			tableName:  r.activeCollectionName,
-			tableAlias: r.multiMatchActiveTableAlias,
-			on: dbx.In(
+	r.multiMatchActiveTableAlias = "__mm_" + r.activeTableAlias
+	r.multiMatch.Joins = append(
+		r.multiMatch.Joins,
+		&search.Join{
+			TableName:  r.activeCollectionName,
+			TableAlias: r.multiMatchActiveTableAlias,
+			On: dbx.In(
 				fmt.Sprintf("[[%s.id]]", r.multiMatchActiveTableAlias),
 				list.ToInterfaceSlice(dataRelIds)...,
 			),
@@ -399,6 +437,7 @@ func (r *runner) processRequestInfoRelationField(bodyField Field) (*search.Resol
 
 var viaRegex = regexp.MustCompile(`^(\w+)_via_(\w+)$`)
 
+// @todo refactor and abstract lastProp processing with the support of field plugins
 func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 	totalProps := len(r.activeProps)
 
@@ -410,17 +449,17 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 
 		// last prop
 		if i == totalProps-1 {
-			return r.processLastProp(collection, prop)
+			return r.finalizeActivePropsProcessing(collection, prop, i)
 		}
 
 		field := collection.Fields.GetByName(prop)
 
-		if field != nil && field.GetHidden() && !r.allowHiddenFields {
+		if field != nil && field.GetHidden() && !r.resolver.allowHiddenFields {
 			return nil, fmt.Errorf("non-filterable field %q", prop)
 		}
 
+		// @todo consider moving to the finalizer and converting to "JSONExtractable" interface with optional extra validation for the remaining props?
 		// json or geoPoint field -> treat the rest of the props as json path
-		// @todo consider converting to "JSONExtractable" interface with optional extra validation for the remaining props?
 		if field != nil && (field.Type() == FieldTypeJSON || field.Type() == FieldTypeGeoPoint) {
 			var jsonPath strings.Builder
 			for j, p := range r.activeProps[i+1:] {
@@ -438,12 +477,12 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 			jsonPathStr := jsonPath.String()
 
 			result := &search.ResolverResult{
-				NoCoalesce: true,
-				Identifier: dbutils.JSONExtract(r.activeTableAlias+"."+inflector.Columnify(prop), jsonPathStr),
+				NullFallback: search.NullFallbackDisabled,
+				Identifier:   dbutils.JSONExtract(r.activeTableAlias+"."+inflector.Columnify(prop), jsonPathStr),
 			}
 
 			if r.withMultiMatch {
-				r.multiMatch.valueIdentifier = dbutils.JSONExtract(r.multiMatchActiveTableAlias+"."+inflector.Columnify(prop), jsonPathStr)
+				r.multiMatch.ValueIdentifier = dbutils.JSONExtract(r.multiMatchActiveTableAlias+"."+inflector.Columnify(prop), jsonPathStr)
 				result.MultiMatchSubQuery = r.multiMatch
 			}
 
@@ -488,7 +527,7 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 				return nil, fmt.Errorf("invalid back relation field %q", parts[2])
 			}
 
-			if backField.GetHidden() && !r.allowHiddenFields {
+			if backField.GetHidden() && !r.resolver.allowHiddenFields {
 				return nil, fmt.Errorf("non-filterable back relation field %q", backField.GetName())
 			}
 
@@ -508,25 +547,24 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 			// ---
 			cleanProp := inflector.Columnify(prop)
 			cleanBackFieldName := inflector.Columnify(backRelField.Name)
-			newTableAlias := r.activeTableAlias + "_" + cleanProp
+
+			newTableAlias := r.activeTableAlias + "_" + cleanProp + r.resolver.joinAliasSuffix
 			newCollectionName := inflector.Columnify(backCollection.Name)
 
 			isBackRelMultiple := backRelField.IsMultiple()
-			if !isBackRelMultiple {
-				// additionally check if the rel field has a single column unique index
-				_, hasUniqueIndex := dbutils.FindSingleColumnUniqueIndex(backCollection.Indexes, backRelField.Name)
-				isBackRelMultiple = !hasUniqueIndex
-			}
 
 			if !isBackRelMultiple {
-				r.resolver.registerJoin(
+				err := r.resolver.registerJoin(
 					newCollectionName,
 					newTableAlias,
 					dbx.NewExp(fmt.Sprintf("[[%s.%s]] = [[%s.id]]", newTableAlias, cleanBackFieldName, r.activeTableAlias)),
 				)
+				if err != nil {
+					return nil, err
+				}
 			} else {
-				jeAlias := r.activeTableAlias + "_" + cleanProp + "_je"
-				r.resolver.registerJoin(
+				jeAlias := "__je_" + newTableAlias
+				err := r.resolver.registerJoin(
 					newCollectionName,
 					newTableAlias,
 					dbx.NewExp(fmt.Sprintf(
@@ -537,6 +575,9 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 						jeAlias,
 					)),
 				)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			r.activeCollectionName = newCollectionName
@@ -547,27 +588,32 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 			// ---
 			if isBackRelMultiple {
 				r.withMultiMatch = true // enable multimatch if not already
+			} else if !r.withMultiMatch {
+				// additionally check if the rel field has a single column unique index;
+				// if not - apply a multi-match check
+				_, hasUniqueIndex := dbutils.FindSingleColumnUniqueIndex(backCollection.Indexes, backRelField.Name)
+				r.withMultiMatch = !hasUniqueIndex
 			}
 
-			newTableAlias2 := r.multiMatchActiveTableAlias + "_" + cleanProp
+			newTableAlias2 := r.multiMatchActiveTableAlias + "_" + cleanProp + r.resolver.joinAliasSuffix
 
 			if !isBackRelMultiple {
-				r.multiMatch.joins = append(
-					r.multiMatch.joins,
-					&join{
-						tableName:  newCollectionName,
-						tableAlias: newTableAlias2,
-						on:         dbx.NewExp(fmt.Sprintf("[[%s.%s]] = [[%s.id]]", newTableAlias2, cleanBackFieldName, r.multiMatchActiveTableAlias)),
+				r.multiMatch.Joins = append(
+					r.multiMatch.Joins,
+					&search.Join{
+						TableName:  newCollectionName,
+						TableAlias: newTableAlias2,
+						On:         dbx.NewExp(fmt.Sprintf("[[%s.%s]] = [[%s.id]]", newTableAlias2, cleanBackFieldName, r.multiMatchActiveTableAlias)),
 					},
 				)
 			} else {
-				jeAlias2 := r.multiMatchActiveTableAlias + "_" + cleanProp + "_je"
-				r.multiMatch.joins = append(
-					r.multiMatch.joins,
-					&join{
-						tableName:  newCollectionName,
-						tableAlias: newTableAlias2,
-						on: dbx.NewExp(fmt.Sprintf(
+				jeAlias2 := "__je_" + newTableAlias2
+				r.multiMatch.Joins = append(
+					r.multiMatch.Joins,
+					&search.Join{
+						TableName:  newCollectionName,
+						TableAlias: newTableAlias2,
+						On: dbx.NewExp(fmt.Sprintf(
 							"[[%s.id]] IN (SELECT [[%s.value]] FROM %s {{%s}})",
 							r.multiMatchActiveTableAlias,
 							jeAlias2,
@@ -607,28 +653,39 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 		if !relField.IsMultiple() &&
 			// the penultimate prop is "id"
 			i == totalProps-2 && r.activeProps[i+1] == FieldNameId {
-			return r.processLastProp(collection, relField.Name)
+			return r.finalizeActivePropsProcessing(collection, relField.Name, i)
 		}
 
 		cleanFieldName := inflector.Columnify(relField.Name)
 		prefixedFieldName := r.activeTableAlias + "." + cleanFieldName
-		newTableAlias := r.activeTableAlias + "_" + cleanFieldName
+		newTableAlias := r.activeTableAlias + "_" + cleanFieldName + r.resolver.joinAliasSuffix
 		newCollectionName := relCollection.Name
 
 		if !relField.IsMultiple() {
-			r.resolver.registerJoin(
+			err := r.resolver.registerJoin(
 				inflector.Columnify(newCollectionName),
 				newTableAlias,
 				dbx.NewExp(fmt.Sprintf("[[%s.id]] = [[%s]]", newTableAlias, prefixedFieldName)),
 			)
+			if err != nil {
+				return nil, err
+			}
 		} else {
-			jeAlias := r.activeTableAlias + "_" + cleanFieldName + "_je"
-			r.resolver.registerJoin(dbutils.JSONEach(prefixedFieldName), jeAlias, nil)
-			r.resolver.registerJoin(
+			jeAlias := "__je_" + newTableAlias
+
+			err := r.resolver.registerJoin(dbutils.JSONEach(prefixedFieldName), jeAlias, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			err = r.resolver.registerJoin(
 				inflector.Columnify(newCollectionName),
 				newTableAlias,
 				dbx.NewExp(fmt.Sprintf("[[%s.id]] = [[%s.value]]", newTableAlias, jeAlias)),
 			)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		r.activeCollectionName = newCollectionName
@@ -645,26 +702,26 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 		prefixedFieldName2 := r.multiMatchActiveTableAlias + "." + cleanFieldName
 
 		if !relField.IsMultiple() {
-			r.multiMatch.joins = append(
-				r.multiMatch.joins,
-				&join{
-					tableName:  inflector.Columnify(newCollectionName),
-					tableAlias: newTableAlias2,
-					on:         dbx.NewExp(fmt.Sprintf("[[%s.id]] = [[%s]]", newTableAlias2, prefixedFieldName2)),
+			r.multiMatch.Joins = append(
+				r.multiMatch.Joins,
+				&search.Join{
+					TableName:  inflector.Columnify(newCollectionName),
+					TableAlias: newTableAlias2,
+					On:         dbx.NewExp(fmt.Sprintf("[[%s.id]] = [[%s]]", newTableAlias2, prefixedFieldName2)),
 				},
 			)
 		} else {
 			jeAlias2 := r.multiMatchActiveTableAlias + "_" + cleanFieldName + "_je"
-			r.multiMatch.joins = append(
-				r.multiMatch.joins,
-				&join{
-					tableName:  dbutils.JSONEach(prefixedFieldName2),
-					tableAlias: jeAlias2,
+			r.multiMatch.Joins = append(
+				r.multiMatch.Joins,
+				&search.Join{
+					TableName:  dbutils.JSONEach(prefixedFieldName2),
+					TableAlias: jeAlias2,
 				},
-				&join{
-					tableName:  inflector.Columnify(newCollectionName),
-					tableAlias: newTableAlias2,
-					on:         dbx.NewExp(fmt.Sprintf("[[%s.id]] = [[%s.value]]", newTableAlias2, jeAlias2)),
+				&search.Join{
+					TableName:  inflector.Columnify(newCollectionName),
+					TableAlias: newTableAlias2,
+					On:         dbx.NewExp(fmt.Sprintf("[[%s.id]] = [[%s.value]]", newTableAlias2, jeAlias2)),
 				},
 			)
 		}
@@ -676,7 +733,7 @@ func (r *runner) processActiveProps() (*search.ResolverResult, error) {
 	return nil, fmt.Errorf("failed to resolve field %q", r.fieldName)
 }
 
-func (r *runner) processLastProp(collection *Collection, prop string) (*search.ResolverResult, error) {
+func (r *runner) finalizeActivePropsProcessing(collection *Collection, prop string, propDepth int) (*search.ResolverResult, error) {
 	name, modifier, err := splitModifier(prop)
 	if err != nil {
 		return nil, err
@@ -690,7 +747,7 @@ func (r *runner) processLastProp(collection *Collection, prop string) (*search.R
 		return nil, fmt.Errorf("unknown field %q", name)
 	}
 
-	if field.GetHidden() && !r.allowHiddenFields {
+	if field.GetHidden() && !r.resolver.allowHiddenFields {
 		return nil, fmt.Errorf("non-filterable field %q", name)
 	}
 
@@ -709,7 +766,7 @@ func (r *runner) processLastProp(collection *Collection, prop string) (*search.R
 
 		if r.withMultiMatch {
 			jePair2 := r.multiMatchActiveTableAlias + "." + cleanFieldName
-			r.multiMatch.valueIdentifier = dbutils.JSONArrayLength(jePair2)
+			r.multiMatch.ValueIdentifier = dbutils.JSONArrayLength(jePair2)
 			result.MultiMatchSubQuery = r.multiMatch
 		}
 
@@ -720,8 +777,12 @@ func (r *runner) processLastProp(collection *Collection, prop string) (*search.R
 	// -------------------------------------------------------
 	if modifier == eachModifier && isMultivaluer {
 		jePair := r.activeTableAlias + "." + cleanFieldName
-		jeAlias := r.activeTableAlias + "_" + cleanFieldName + "_je"
-		r.resolver.registerJoin(dbutils.JSONEach(jePair), jeAlias, nil)
+		jeAlias := "__je_" + r.activeTableAlias + "_" + cleanFieldName + r.resolver.joinAliasSuffix
+
+		err := r.resolver.registerJoin(dbutils.JSONEach(jePair), jeAlias, nil)
+		if err != nil {
+			return nil, err
+		}
 
 		result := &search.ResolverResult{
 			Identifier: fmt.Sprintf("[[%s.value]]", jeAlias),
@@ -733,13 +794,13 @@ func (r *runner) processLastProp(collection *Collection, prop string) (*search.R
 
 		if r.withMultiMatch {
 			jePair2 := r.multiMatchActiveTableAlias + "." + cleanFieldName
-			jeAlias2 := r.multiMatchActiveTableAlias + "_" + cleanFieldName + "_je"
+			jeAlias2 := "__je_" + r.multiMatchActiveTableAlias + "_" + cleanFieldName + r.resolver.joinAliasSuffix
 
-			r.multiMatch.joins = append(r.multiMatch.joins, &join{
-				tableName:  dbutils.JSONEach(jePair2),
-				tableAlias: jeAlias2,
+			r.multiMatch.Joins = append(r.multiMatch.Joins, &search.Join{
+				TableName:  dbutils.JSONEach(jePair2),
+				TableAlias: jeAlias2,
 			})
-			r.multiMatch.valueIdentifier = fmt.Sprintf("[[%s.value]]", jeAlias2)
+			r.multiMatch.ValueIdentifier = fmt.Sprintf("[[%s.value]]", jeAlias2)
 
 			result.MultiMatchSubQuery = r.multiMatch
 		}
@@ -754,12 +815,12 @@ func (r *runner) processLastProp(collection *Collection, prop string) (*search.R
 	}
 
 	if r.withMultiMatch {
-		r.multiMatch.valueIdentifier = "[[" + r.multiMatchActiveTableAlias + "." + cleanFieldName + "]]"
+		r.multiMatch.ValueIdentifier = "[[" + r.multiMatchActiveTableAlias + "." + cleanFieldName + "]]"
 		result.MultiMatchSubQuery = r.multiMatch
 	}
 
 	// allow querying only auth records with emails marked as public
-	if field.GetName() == FieldNameEmail && !r.allowHiddenFields && collection.IsAuth() {
+	if field.GetName() == FieldNameEmail && !r.resolver.allowHiddenFields && collection.IsAuth() {
 		result.AfterBuild = func(expr dbx.Expression) dbx.Expression {
 			return dbx.Enclose(dbx.And(expr, dbx.NewExp(fmt.Sprintf(
 				"[[%s.%s]] = TRUE",
@@ -773,10 +834,10 @@ func (r *runner) processLastProp(collection *Collection, prop string) (*search.R
 	// stored as json work correctly when compared to their SQL equivalent
 	// (https://github.com/pocketbase/pocketbase/issues/4068)
 	if field.Type() == FieldTypeJSON {
-		result.NoCoalesce = true
+		result.NullFallback = search.NullFallbackDisabled
 		result.Identifier = dbutils.JSONExtract(r.activeTableAlias+"."+cleanFieldName, "")
 		if r.withMultiMatch {
-			r.multiMatch.valueIdentifier = dbutils.JSONExtract(r.multiMatchActiveTableAlias+"."+cleanFieldName, "")
+			r.multiMatch.ValueIdentifier = dbutils.JSONExtract(r.multiMatchActiveTableAlias+"."+cleanFieldName, "")
 		}
 	}
 
@@ -784,7 +845,7 @@ func (r *runner) processLastProp(collection *Collection, prop string) (*search.R
 	if modifier == lowerModifier {
 		result.Identifier = "LOWER(" + result.Identifier + ")"
 		if r.withMultiMatch {
-			r.multiMatch.valueIdentifier = "LOWER(" + r.multiMatch.valueIdentifier + ")"
+			r.multiMatch.ValueIdentifier = "LOWER(" + r.multiMatch.ValueIdentifier + ")"
 		}
 	}
 

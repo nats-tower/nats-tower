@@ -1,0 +1,33 @@
+[tools]
+"aqua:nats-io/natscli" = "0.4.0"
+bun = "latest"
+"github:nats-io/nats-server" = "2.14.2"
+
+[tasks.nats-central]
+description = "Run the central NATS server of the supercluster"
+run = "nats-server -c supercluster/central.conf"
+
+[tasks.nats-west]
+description = "Run the west NATS server of the supercluster"
+run = "nats-server -c supercluster/west.conf"
+
+[tasks.nats-east]
+description = "Run the east NATS server of the supercluster"
+run = "nats-server -c supercluster/east.conf"
+
+[tasks.supercluster]
+description = "Run the local NATS supercluster (central, west, east)"
+depends = ["nats-central", "nats-west", "nats-east"]
+
+[tasks.backend]
+description = "Run the backend server with templ live-reload"
+run = 'go run cmd/main.go serve --http 0.0.0.0:8099'
+
+[tasks.frontend]
+description = "Run the frontend dev server"
+dir = "frontend"
+run = "bun run --bun dev"
+
+[tasks.dev]
+description = "Spin up the local supercluster, backend and frontend"
+depends = ["supercluster", "backend", "frontend"]

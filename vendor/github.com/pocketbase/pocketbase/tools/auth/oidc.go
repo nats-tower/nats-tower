@@ -2,20 +2,15 @@ package auth
 
 import (
 	"context"
-	"crypto/rsa"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"math/big"
-	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/pocketbase/pocketbase/tools/auth/internal/jwk"
 	"github.com/pocketbase/pocketbase/tools/security"
 	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cast"
@@ -53,7 +48,7 @@ const NameOIDC string = "oidc"
 //
 // The provider support the following Extra config options:
 //   - "jwksURL" - url to the keys to validate the id_token signature (optional and used only when reading the user data from the id_token)
-//   - "issuers" - list of valid issuers for the iss id_token claim (optioanl and used only when reading the user data from the id_token)
+//   - "issuers" - list of valid issuers for the iss id_token claim (optional and used only when reading the user data from the id_token)
 type OIDC struct {
 	BaseProvider
 }
@@ -62,6 +57,8 @@ type OIDC struct {
 func NewOIDCProvider() *OIDC {
 	return &OIDC{BaseProvider{
 		ctx:         context.Background(),
+		order:       99,
+		logo:        `<svg xmlns="http://www.w3.org/2000/svg" width="93" height="84" fill="none"><path fill="#ccc" d="M83.4 32.9c-8.7-5.5-21-8.8-34.3-8.8C22 24 .4 37.5.4 54 .4 69.3 18.5 81.8 42 84v-8.7c-15.9-2-27.8-10.7-27.8-21 0-11.9 15.5-21.6 34.8-21.6 9.5 0 18.2 2.4 24.5 6.3l-9 5.6h27.9V27.3z"/><path fill="#ff6200" d="M42 9.2V84l14-8.7V.2z"/></svg>`,
 		displayName: "OIDC",
 		pkce:        true,
 		scopes: []string{
@@ -140,7 +137,7 @@ func (p *OIDC) parseIdToken(token *oauth2.Token) (jwt.MapClaims, error) {
 	}
 
 	claims := jwt.MapClaims{}
-	t, _, err := jwt.NewParser().ParseUnverified(idToken, claims)
+	_, _, err := jwt.NewParser().ParseUnverified(idToken, claims)
 	if err != nil {
 		return nil, err
 	}
@@ -181,112 +178,11 @@ func (p *OIDC) parseIdToken(token *oauth2.Token) (jwt.MapClaims, error) {
 	// (see also https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation)
 	jwksURL := cast.ToString(p.Extra()["jwksURL"])
 	if jwksURL != "" {
-		kid, _ := t.Header["kid"].(string)
-		err = validateIdTokenSignature(p.ctx, idToken, jwksURL, kid)
+		err = jwk.ValidateTokenSignature(p.ctx, idToken, jwksURL)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("id_token validation failed: %w", err)
 		}
 	}
 
 	return claims, nil
-}
-
-func validateIdTokenSignature(ctx context.Context, idToken string, jwksURL string, kid string) error {
-	// fetch the public key set
-	// ---
-	if kid == "" {
-		return errors.New("missing kid header value")
-	}
-
-	key, err := fetchJWK(ctx, jwksURL, kid)
-	if err != nil {
-		return err
-	}
-
-	// decode the key params per RFC 7518 (https://tools.ietf.org/html/rfc7518#section-6.3)
-	// and construct a valid publicKey from them
-	// ---
-	exponent, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(key.E, "="))
-	if err != nil {
-		return err
-	}
-
-	modulus, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(key.N, "="))
-	if err != nil {
-		return err
-	}
-
-	publicKey := &rsa.PublicKey{
-		// https://tools.ietf.org/html/rfc7517#appendix-A.1
-		E: int(big.NewInt(0).SetBytes(exponent).Uint64()),
-		N: big.NewInt(0).SetBytes(modulus),
-	}
-
-	// verify the signiture
-	// ---
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{key.Alg}))
-
-	parsedToken, err := parser.Parse(idToken, func(t *jwt.Token) (any, error) {
-		return publicKey, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	if !parsedToken.Valid {
-		return errors.New("the parsed id_token is invalid")
-	}
-
-	return nil
-}
-
-type jwk struct {
-	Kty string
-	Kid string
-	Use string
-	Alg string
-	N   string
-	E   string
-}
-
-func fetchJWK(ctx context.Context, jwksURL string, kid string) (*jwk, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", jwksURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	rawBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// http.Client.Get doesn't treat non 2xx responses as error
-	if res.StatusCode >= 400 {
-		return nil, fmt.Errorf(
-			"failed to verify the provided id_token (%d):\n%s",
-			res.StatusCode,
-			string(rawBody),
-		)
-	}
-
-	jwks := struct {
-		Keys []*jwk
-	}{}
-	if err := json.Unmarshal(rawBody, &jwks); err != nil {
-		return nil, err
-	}
-
-	for _, key := range jwks.Keys {
-		if key.Kid == kid {
-			return key, nil
-		}
-	}
-
-	return nil, fmt.Errorf("jwk with kid %q was not found", kid)
 }

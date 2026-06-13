@@ -314,11 +314,15 @@ func (cv *collectionValidator) checkViewQuery(value any) error {
 		return nil // nothing to check
 	}
 
-	if _, err := cv.app.CreateViewFields(v); err != nil {
-		return validation.NewError(
-			"validation_invalid_view_query",
-			fmt.Sprintf("Invalid query - %s", err.Error()),
-		)
+	_, err := cv.app.DryRunView(v, 10)
+	if err != nil {
+		rawErr := err.Error()
+		if len(rawErr) > 500 {
+			// restrict just as an extra precaution
+			rawErr = rawErr[:500]
+		}
+
+		return validation.NewError("validation_invalid_view_query", "Invalid query - "+rawErr)
 	}
 
 	return nil
@@ -489,7 +493,7 @@ func (validator *collectionValidator) checkRule(value any) error {
 		return nil // nothing to check
 	}
 
-	r := NewRecordFieldResolver(validator.app, validator.new, nil, true)
+	r := NewRecordFieldResolver(validator.app, validator.new, &RequestInfo{}, true)
 	_, err := search.FilterData(vStr).BuildExpr(r)
 	if err != nil {
 		return validation.NewError("validation_invalid_rule", "Invalid rule. Raw error: "+err.Error())

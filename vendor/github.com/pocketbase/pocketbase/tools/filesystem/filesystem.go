@@ -38,7 +38,7 @@ type System struct {
 	bucket *blob.Bucket
 }
 
-// NewS3 initializes an S3 filesystem instance.
+// NewS3 initializes a new S3 filesystem instance.
 //
 // NB! Make sure to call `Close()` after you are done working with it.
 func NewS3(
@@ -411,10 +411,20 @@ var inlineServeContentTypes = []string{
 
 // manualExtensionContentTypes is a map of file extensions to content types.
 var manualExtensionContentTypes = map[string]string{
-	".svg": "image/svg+xml",   // (see https://github.com/whatwg/mimesniff/issues/7)
-	".css": "text/css",        // (see https://github.com/gabriel-vasile/mimetype/pull/113)
-	".js":  "text/javascript", // (see https://github.com/pocketbase/pocketbase/issues/6597)
+	// https://github.com/whatwg/mimesniff/issues/7
+	".svg": "image/svg+xml",
+
+	// https://github.com/gabriel-vasile/mimetype/pull/113
+	".css": "text/css",
+
+	// https://github.com/pocketbase/pocketbase/issues/6597
+	".js":  "text/javascript",
 	".mjs": "text/javascript",
+
+	// https://github.com/pocketbase/pocketbase/discussions/7467
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 // forceAttachmentParam is the name of the request query parameter to
@@ -449,7 +459,7 @@ func (s *System) Serve(res http.ResponseWriter, req *http.Request, fileKey strin
 	// make an exception for specific content types and force a custom
 	// content type to send in the response so that it can be loaded properly
 	extContentType := realContentType
-	if ct, found := manualExtensionContentTypes[filepath.Ext(name)]; found {
+	if ct, found := manualExtensionContentTypes[filepath.Ext(fileKey)]; found {
 		extContentType = ct
 	}
 
@@ -536,25 +546,38 @@ func (s *System) CreateThumb(originalKey string, thumbKey, thumbSize string) err
 		}
 	}
 
+	originalContentType := r.ContentType()
+
 	opts := &blob.WriterOptions{
-		ContentType: r.ContentType(),
+		ContentType: originalContentType,
 	}
 
-	// open a thumb storage writer (aka. prepare for upload)
-	w, writerErr := s.bucket.NewWriter(s.ctx, thumbKey, opts)
-	if writerErr != nil {
-		return writerErr
-	}
+	var format imaging.Format
 
-	// try to detect the thumb format based on the original file name
-	// (fallbacks to png on error)
-	format, err := imaging.FormatFromFilename(thumbKey)
-	if err != nil {
+	switch originalContentType {
+	case "image/jpeg":
+		format = imaging.JPEG
+	case "image/gif":
+		format = imaging.GIF
+	case "image/tiff":
+		format = imaging.TIFF
+	case "image/bmp":
+		format = imaging.BMP
+	default:
+		// fallback to PNG (this includes webp!)
+		opts.ContentType = "image/png"
 		format = imaging.PNG
 	}
 
+	// open a thumb storage writer (aka. prepare for upload)
+	w, err := s.bucket.NewWriter(s.ctx, thumbKey, opts)
+	if err != nil {
+		return err
+	}
+
 	// thumb encode (aka. upload)
-	if err := imaging.Encode(w, thumbImg, format); err != nil {
+	err = imaging.Encode(w, thumbImg, format)
+	if err != nil {
 		w.Close()
 		return err
 	}

@@ -65,12 +65,7 @@ export function getNavInfo(resolvedHref: string | undefined) {
 			title: string;
 			url: string;
 			icon: LucideIcon;
-			breadcrumb:
-				| {
-						name: string;
-						url: string;
-				  }
-				| undefined;
+			breadcrumb: { name: string; url: string } | undefined;
 			isActive: boolean;
 			subPaths: {
 				path: string;
@@ -114,6 +109,13 @@ export function getNavInfo(resolvedHref: string | undefined) {
 						breadcrumb: {
 							name: "Users",
 							url: "/installations/$installationId/accounts/$accountId/users",
+						},
+					},
+					{
+						path: "/installations/$installationId/accounts/$accountId/roles",
+						breadcrumb: {
+							name: "Roles",
+							url: "/installations/$installationId/accounts/$accountId/roles",
 						},
 					},
 					{

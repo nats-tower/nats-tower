@@ -26,24 +26,27 @@ type Twitter struct {
 func NewTwitterProvider() *Twitter {
 	return &Twitter{BaseProvider{
 		ctx:         context.Background(),
-		displayName: "Twitter",
+		order:       13,
+		logo:        `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300.3"><path d="M179 127 290 0h-26l-97 110L89 0H0l117 167L0 300h26l103-116 82 116h89M36 20h41l187 262h-41"/></svg>`,
+		displayName: "X/Twitter",
 		pkce:        true,
 		scopes: []string{
 			"users.read",
+			"users.email",
 
-			// we don't actually use this scope, but for some reason it is required by the `/2/users/me` endpoint
-			// (see https://developer.twitter.com/en/docs/twitter-api/users/lookup/api-reference/get-users-me)
+			// we don't actually use this scope, but for some reason the `/2/users/me` endpoint fails with 403 without it
+			// (see https://docs.x.com/fundamentals/authentication/guides/v2-authentication-mapping#x-api-v2-authentication-mapping)
 			"tweet.read",
 		},
-		authURL:     "https://twitter.com/i/oauth2/authorize",
-		tokenURL:    "https://api.twitter.com/2/oauth2/token",
-		userInfoURL: "https://api.twitter.com/2/users/me?user.fields=id,name,username,profile_image_url",
+		authURL:     "https://x.com/i/oauth2/authorize",
+		tokenURL:    "https://api.x.com/2/oauth2/token",
+		userInfoURL: "https://api.x.com/2/users/me?user.fields=id,name,username,profile_image_url,confirmed_email",
 	}}
 }
 
 // FetchAuthUser returns an AuthUser instance based on the Twitter's user api.
 //
-// API reference: https://developer.twitter.com/en/docs/twitter-api/users/lookup/api-reference/get-users-me
+// API reference: https://docs.x.com/x-api/users/user-lookup-me
 func (p *Twitter) FetchAuthUser(token *oauth2.Token) (*AuthUser, error) {
 	data, err := p.FetchRawUserInfo(token)
 	if err != nil {
@@ -60,11 +63,8 @@ func (p *Twitter) FetchAuthUser(token *oauth2.Token) (*AuthUser, error) {
 			Id              string `json:"id"`
 			Name            string `json:"name"`
 			Username        string `json:"username"`
+			Email           string `json:"confirmed_email"`
 			ProfileImageURL string `json:"profile_image_url"`
-
-			// NB! At the time of writing, Twitter OAuth2 doesn't support returning the user email address
-			// (see https://twittercommunity.com/t/which-api-to-get-user-after-oauth2-authorization/162417/33)
-			// Email string `json:"email"`
 		} `json:"data"`
 	}{}
 	if err := json.Unmarshal(data, &extracted); err != nil {
@@ -75,6 +75,7 @@ func (p *Twitter) FetchAuthUser(token *oauth2.Token) (*AuthUser, error) {
 		Id:           extracted.Data.Id,
 		Name:         extracted.Data.Name,
 		Username:     extracted.Data.Username,
+		Email:        extracted.Data.Email,
 		AvatarURL:    extracted.Data.ProfileImageURL,
 		RawUser:      rawUser,
 		AccessToken:  token.AccessToken,

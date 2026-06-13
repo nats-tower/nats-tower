@@ -148,7 +148,7 @@ function Roles() {
 										await pb.collection("nats_auth_signing_keys").delete(role.id);
 										toast.success(`Role "${role.role}" deleted successfully`);
 										mutateRoles();
-									} catch (error) {
+									} catch {
 										toast.error("Failed to delete role");
 									}
 								}
@@ -260,7 +260,7 @@ function RoleDialog({
 				toast.success(`Role "${roleName}" created successfully`);
 			}
 			onClose();
-		} catch (error) {
+		} catch {
 			toast.error(`Failed to ${role ? "update" : "create"} role`);
 		}
 	};
