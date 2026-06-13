@@ -372,6 +372,21 @@
           "default": false,
           "description": "Allow higher performance, direct access to get individual messages"
         },
+        "allow_atomic": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow atomic batched publishes"
+        },
+        "allow_msg_counter": {
+          "type": "boolean",
+          "default": false,
+          "description": "Configures a stream to be a counter and to reject all other messages"
+        },
+        "allow_msg_schedules": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allows the scheduling of messages"
+        },
         "mirror_direct": {
           "type": "boolean",
           "default": false,
@@ -419,9 +434,9 @@
             "inactive_threshold": {
               "description": "Maximum value for inactive_threshold for consumers of this stream. Acts as a default when consumers do not set this value.",
               "$comment": "nanoseconds depicting a duration in time, signed 64 bit integer",
+              "minimum": 0,
               "type": "integer",
-              "maximum": 9223372036854775807,
-              "minimum": -9223372036854775807
+              "maximum": 9223372036854775807
             },
             "max_ack_pending": {
               "description": "Maximum value for max_ack_pending for consumers of this stream. Acts as a default when consumers do not set this value.",
@@ -443,6 +458,16 @@
           "$comment": "nanoseconds depicting a duration in time, signed 64 bit integer",
           "type": "integer",
           "maximum": 9223372036854775807
+        },
+        "persist_mode": {
+          "description": "Sets a specific persistence mode for writing to the Stream",
+          "type": "string",
+          "enum": [
+            "",
+            "default",
+            "async"
+          ],
+          "default": ""
         }
       }
     },

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -141,6 +142,13 @@ func (m *Manager) IsStreamMaxBytesRequired() (bool, error) {
 
 func (m *Manager) jsonRequest(subj string, req any, response any) (err error) {
 	var body []byte
+	var hdr nats.Header
+
+	lvl, _ := api.RequiredApiLevel(req)
+	if lvl > 0 {
+		hdr = make(nats.Header)
+		hdr.Add(api.JSRequiredApiLevel, strconv.Itoa(lvl))
+	}
 
 	switch {
 	case req == nil:
@@ -156,7 +164,7 @@ func (m *Manager) jsonRequest(subj string, req any, response any) (err error) {
 		}
 	}
 
-	msg, err := m.request(m.apiSubject(subj), body)
+	msg, err := m.request(m.apiSubject(subj), body, hdr)
 	if err != nil {
 		return err
 	}
@@ -276,11 +284,11 @@ func (m *Manager) iterableRequest(subj string, req apiIterableRequest, response 
 	return nil
 }
 
-func (m *Manager) request(subj string, data []byte) (res *nats.Msg, err error) {
-	return m.requestWithTimeout(subj, data, m.timeout)
+func (m *Manager) request(subj string, data []byte, hdr nats.Header) (res *nats.Msg, err error) {
+	return m.requestWithTimeout(subj, data, hdr, m.timeout)
 }
 
-func (m *Manager) requestWithTimeout(subj string, data []byte, timeout time.Duration) (res *nats.Msg, err error) {
+func (m *Manager) requestWithTimeout(subj string, data []byte, hdr nats.Header, timeout time.Duration) (res *nats.Msg, err error) {
 	if m == nil || m.nc == nil {
 		return nil, fmt.Errorf("nats connection is not set")
 	}
@@ -295,7 +303,7 @@ func (m *Manager) requestWithTimeout(subj string, data []byte, timeout time.Dura
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	res, err = m.requestWithContext(ctx, subj, data)
+	res, err = m.requestWithContext(ctx, subj, data, hdr)
 	if err != nil {
 		return nil, err
 	}
@@ -303,12 +311,22 @@ func (m *Manager) requestWithTimeout(subj string, data []byte, timeout time.Dura
 	return res, err
 }
 
-func (m *Manager) requestWithContext(ctx context.Context, subj string, data []byte) (res *nats.Msg, err error) {
+func (m *Manager) requestWithContext(ctx context.Context, subj string, data []byte, hdr nats.Header) (res *nats.Msg, err error) {
 	if m.trace {
-		log.Printf(">>> %s\n%s\n\n", subj, string(data))
+		log.Printf(">>> %s", subj)
+		if len(hdr) > 0 {
+			for k, v := range hdr {
+				log.Printf(">>> Header: %v: %v", k, v)
+			}
+		}
+		log.Print(string(data))
 	}
 
-	res, err = m.nc.RequestWithContext(ctx, subj, data)
+	msg := nats.NewMsg(subj)
+	msg.Data = data
+	msg.Header = hdr
+
+	res, err = m.nc.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		if m.trace {
 			log.Printf("<<< %s: %s\n\n", subj, err.Error())
@@ -366,24 +384,24 @@ func (m *Manager) IsKnownConsumer(stream string, consumer string) (bool, error) 
 	return true, nil
 }
 
-// EachStream iterates over all known Streams, does not handle any streams the cluster could not get data from but returns a list of those
-func (m *Manager) EachStream(filter *StreamNamesFilter, cb func(*Stream)) (missing []string, err error) {
-	streams, missing, err := m.Streams(filter)
+// EachStream iterates over all known Streams, Streams that the state is not known off are in the missing list and offline streams with reasons are in offline
+func (m *Manager) EachStream(filter *StreamNamesFilter, cb func(*Stream)) (missing []string, offline map[string]string, err error) {
+	streams, missing, offline, err := m.Streams(filter)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, s := range streams {
 		cb(s)
 	}
 
-	return missing, nil
+	return missing, offline, nil
 }
 
 // Consumers is a sorted list of all known Consumers within a Stream and a list of any consumer names that were known but no details were found
-func (m *Manager) Consumers(stream string) (consumers []*Consumer, missing []string, err error) {
+func (m *Manager) Consumers(stream string) (consumers []*Consumer, missing []string, offline map[string]string, err error) {
 	if !IsValidName(stream) {
-		return nil, nil, fmt.Errorf("%q is not a valid stream name", stream)
+		return nil, nil, nil, fmt.Errorf("%q is not a valid stream name", stream)
 	}
 
 	var (
@@ -399,10 +417,18 @@ func (m *Manager) Consumers(stream string) (consumers []*Consumer, missing []str
 
 		missing = append(missing, apiresp.Missing...)
 		cinfo = append(cinfo, apiresp.Consumers...)
+		for k, v := range apiresp.Offline {
+			if offline == nil {
+				offline = make(map[string]string)
+			}
+
+			offline[k] = v
+		}
+
 		return nil
 	})
 	if err != nil {
-		return consumers, missing, err
+		return nil, nil, nil, err
 	}
 
 	sort.Slice(cinfo, func(i int, j int) bool {
@@ -416,29 +442,15 @@ func (m *Manager) Consumers(stream string) (consumers []*Consumer, missing []str
 		consumers = append(consumers, consumer)
 	}
 
-	return consumers, missing, nil
-}
-
-// StreamTemplateNames is a sorted list of all known StreamTemplates
-func (m *Manager) StreamTemplateNames() (templates []string, err error) {
-	resp := func() apiIterableResponse { return &api.JSApiStreamTemplateNamesResponse{} }
-	err = m.iterableRequest(api.JSApiTemplateNames, &api.JSApiStreamTemplateNamesRequest{JSApiIterableRequest: api.JSApiIterableRequest{Offset: 0}}, resp, func(page any) error {
-		apiresp, ok := page.(*api.JSApiStreamTemplateNamesResponse)
-		if !ok {
-			return fmt.Errorf("invalid response type from iterable request")
+	var filteredMissing []string
+	for _, c := range missing {
+		_, found := offline[c]
+		if !found {
+			filteredMissing = append(filteredMissing, c)
 		}
-
-		templates = append(templates, apiresp.Templates...)
-
-		return nil
-	})
-	if err != nil {
-		return templates, err
 	}
 
-	sort.Strings(templates)
-
-	return templates, nil
+	return consumers, filteredMissing, offline, nil
 }
 
 // ConsumerNames is a sorted list of all known consumers within a stream
@@ -466,14 +478,9 @@ func (m *Manager) ConsumerNames(stream string) (names []string, err error) {
 	return names, nil
 }
 
-// Streams is a sorted list of all known Streams and a list of any stream names that were known but no details were found
-func (m *Manager) Streams(filter *StreamNamesFilter) ([]*Stream, []string, error) {
-	var (
-		streams []*Stream
-		missing []string
-		err     error
-		resp    = func() apiIterableResponse { return &api.JSApiStreamListResponse{} }
-	)
+// Streams is a sorted list of all known Streams and a list of any stream names that were known but no details were found, since 2.12 offline streams and reasons will be included also
+func (m *Manager) Streams(filter *StreamNamesFilter) (streams []*Stream, missing []string, offline map[string]string, err error) {
+	resp := func() apiIterableResponse { return &api.JSApiStreamListResponse{} }
 
 	req := &api.JSApiStreamListRequest{JSApiIterableRequest: api.JSApiIterableRequest{Offset: 0}}
 	if filter != nil {
@@ -495,11 +502,26 @@ func (m *Manager) Streams(filter *StreamNamesFilter) ([]*Stream, []string, error
 		}
 
 		missing = append(missing, apiresp.Missing...)
+		for k, v := range apiresp.Offline {
+			if offline == nil {
+				offline = make(map[string]string)
+			}
+
+			offline[k] = v
+		}
 
 		return nil
 	})
 
-	return streams, missing, err
+	var filteredMissing []string
+	for _, m := range missing {
+		_, found := offline[m]
+		if !found {
+			filteredMissing = append(filteredMissing, m)
+		}
+	}
+
+	return streams, filteredMissing, offline, err
 }
 
 func (m *Manager) apiSubject(subject string) string {
