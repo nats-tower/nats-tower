@@ -15,7 +15,6 @@ package gsl
 
 import (
 	"errors"
-	"strings"
 	"sync"
 	"unsafe"
 
@@ -45,16 +44,6 @@ var (
 	ErrNilChan           = errors.New("gsl: nil channel")
 	ErrAlreadyRegistered = errors.New("gsl: notification already registered")
 )
-
-// SimpleSublist is an alias type for GenericSublist that takes
-// empty values, useful for tracking interest only without any
-// unnecessary allocations.
-type SimpleSublist = GenericSublist[struct{}]
-
-// NewSimpleSublist will create a simple sublist.
-func NewSimpleSublist() *SimpleSublist {
-	return &GenericSublist[struct{}]{root: newLevel[struct{}]()}
-}
 
 // A GenericSublist stores and efficiently retrieves subscriptions.
 type GenericSublist[T comparable] struct {
@@ -93,13 +82,24 @@ func NewSublist[T comparable]() *GenericSublist[T] {
 
 // Insert adds a subscription into the sublist
 func (s *GenericSublist[T]) Insert(subject string, value T) error {
+	tsa := [32]string{}
+	tokens := tsa[:0]
+	start := 0
+	for i := 0; i < len(subject); i++ {
+		if subject[i] == btsep {
+			tokens = append(tokens, subject[start:i])
+			start = i + 1
+		}
+	}
+	tokens = append(tokens, subject[start:])
+
 	s.Lock()
 
 	var sfwc bool
 	var n *node[T]
 	l := s.root
 
-	for t := range strings.SplitSeq(subject, tsep) {
+	for _, t := range tokens {
 		lt := len(t)
 		if lt == 0 || sfwc {
 			s.Unlock()
@@ -307,6 +307,17 @@ type lnt[T comparable] struct {
 
 // Raw low level remove, can do batches with lock held outside.
 func (s *GenericSublist[T]) remove(subject string, value T, shouldLock bool) error {
+	tsa := [32]string{}
+	tokens := tsa[:0]
+	start := 0
+	for i := 0; i < len(subject); i++ {
+		if subject[i] == btsep {
+			tokens = append(tokens, subject[start:i])
+			start = i + 1
+		}
+	}
+	tokens = append(tokens, subject[start:])
+
 	if shouldLock {
 		s.Lock()
 		defer s.Unlock()
@@ -320,7 +331,7 @@ func (s *GenericSublist[T]) remove(subject string, value T, shouldLock bool) err
 	var lnts [32]lnt[T]
 	levels := lnts[:0]
 
-	for t := range strings.SplitSeq(subject, tsep) {
+	for _, t := range tokens {
 		lt := len(t)
 		if lt == 0 || sfwc {
 			return ErrInvalidSubject
@@ -392,9 +403,6 @@ func (n *node[T]) isEmpty() bool {
 
 // Return the number of nodes for the given level.
 func (l *level[T]) numNodes() int {
-	if l == nil {
-		return 0
-	}
 	num := len(l.nodes)
 	if l.pwc != nil {
 		num++
@@ -476,49 +484,39 @@ func intersectStree[T1 any, T2 comparable](st *stree.SubjectTree[T1], r *level[T
 	if len(nsubj) > 0 {
 		nsubj = append(subj, '.')
 	}
-	if r.fwc != nil {
+	switch {
+	case r.fwc != nil:
 		// We've reached a full wildcard, do a FWC match on the stree at this point
 		// and don't keep iterating downward.
 		nsubj := append(nsubj, '>')
 		st.Match(nsubj, cb)
-		return
-	}
-	if r.pwc != nil {
+	case r.pwc != nil:
 		// We've found a partial wildcard. We'll keep iterating downwards, but first
 		// check whether there's interest at this level (without triggering dupes) and
 		// match if so.
-		var done bool
 		nsubj := append(nsubj, '*')
 		if len(r.pwc.subs) > 0 {
 			st.Match(nsubj, cb)
-			done = true
 		}
-		if r.pwc.next.numNodes() > 0 {
+		if r.pwc.next != nil && r.pwc.next.numNodes() > 0 {
 			intersectStree(st, r.pwc.next, nsubj, cb)
 		}
-		if done {
-			return
-		}
-	}
-	// Normal node with subject literals, keep iterating.
-	for t, n := range r.nodes {
-		if r.pwc != nil && r.pwc.next.numNodes() > 0 && n.next.numNodes() > 0 {
-			// A wildcard at the next level will already visit these descendents
-			// so skip so we don't callback the same subject more than once.
-			continue
-		}
-		nsubj := append(nsubj, t...)
-		if len(n.subs) > 0 {
-			if subjectHasWildcard(bytesToString(nsubj)) {
-				st.Match(nsubj, cb)
-			} else {
-				if e, ok := st.Find(nsubj); ok {
-					cb(nsubj, e)
+	default:
+		// Normal node with subject literals, keep iterating.
+		for t, n := range r.nodes {
+			nsubj := append(nsubj, t...)
+			if len(n.subs) > 0 {
+				if subjectHasWildcard(bytesToString(nsubj)) {
+					st.Match(nsubj, cb)
+				} else {
+					if e, ok := st.Find(nsubj); ok {
+						cb(nsubj, e)
+					}
 				}
 			}
-		}
-		if n.next.numNodes() > 0 {
-			intersectStree(st, n.next, nsubj, cb)
+			if n.next != nil && n.next.numNodes() > 0 {
+				intersectStree(st, n.next, nsubj, cb)
+			}
 		}
 	}
 }

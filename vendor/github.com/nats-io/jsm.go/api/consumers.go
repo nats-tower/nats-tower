@@ -23,43 +23,27 @@ import (
 
 // also update wellKnownSubjectSchemas
 const (
-	JSApiConsumerCreate               = "$JS.API.CONSUMER.CREATE.*"
-	JSApiConsumerCreateEx             = "$JS.API.CONSUMER.CREATE.%s.*.>"
-	JSApiConsumerCreateExPrefix       = "$JS.API.CONSUMER.CREATE"
-	JSApiConsumerCreateExT            = "$JS.API.CONSUMER.CREATE.%s.%s.%s"
-	JSApiConsumerCreatePrefix         = "$JS.API.CONSUMER.CREATE"
-	JSApiConsumerCreateT              = "$JS.API.CONSUMER.CREATE.%s"
-	JSApiConsumerCreateWithName       = "$JS.API.CONSUMER.CREATE.*.>"
-	JSApiConsumerCreateWithNamePrefix = "$JS.API.CONSUMER.CREATE"
-	JSApiConsumerCreateWithNameT      = "$JS.API.CONSUMER.CREATE.%s.%s"
-	JSApiConsumerDeletePrefix         = "$JS.API.CONSUMER.DELETE"
-	JSApiConsumerDeleteT              = "$JS.API.CONSUMER.DELETE.%s.%s"
-	JSApiConsumerInfoPrefix           = "$JS.API.CONSUMER.INFO"
-	JSApiConsumerInfoT                = "$JS.API.CONSUMER.INFO.%s.%s"
-	JSApiConsumerLeaderStepDown       = "$JS.API.CONSUMER.LEADER.STEPDOWN.*.*"
-	JSApiConsumerLeaderStepDownPrefix = "$JS.API.CONSUMER.LEADER.STEPDOWN"
-	JSApiConsumerLeaderStepDownT      = "$JS.API.CONSUMER.LEADER.STEPDOWN.%s.%s"
-	JSApiConsumerList                 = "$JS.API.CONSUMER.LIST.*"
-	JSApiConsumerListPrefix           = "$JS.API.CONSUMER.LIST"
-	JSApiConsumerListT                = "$JS.API.CONSUMER.LIST.%s"
-	JSApiConsumerNames                = "$JS.API.CONSUMER.NAMES.*"
-	JSApiConsumerNamesPrefix          = "$JS.API.CONSUMER.NAMES"
-	JSApiConsumerNamesT               = "$JS.API.CONSUMER.NAMES.%s"
-	JSApiConsumerPause                = "$JS.API.CONSUMER.PAUSE.*.*"
-	JSApiConsumerPausePrefix          = "$JS.API.CONSUMER.PAUSE"
-	JSApiConsumerPauseT               = "$JS.API.CONSUMER.PAUSE.%s.%s"
-	JSApiConsumerUnpin                = "$JS.API.CONSUMER.UNPIN.*.*"
-	JSApiConsumerUnpinPrefix          = "$JS.API.CONSUMER.UNPIN"
-	JSApiConsumerUnpinT               = "$JS.API.CONSUMER.UNPIN.%s.%s"
-	JSApiDurableCreate                = "$JS.API.CONSUMER.DURABLE.CREATE.*.*"
-	JSApiDurableCreatePrefix          = "$JS.API.CONSUMER.DURABLE.CREATE"
-	JSApiDurableCreateT               = "$JS.API.CONSUMER.DURABLE.CREATE.%s.%s"
-	JSApiRequestNext                  = "$JS.API.CONSUMER.MSG.NEXT.*.*"
-	JSApiRequestNextPrefix            = "$JS.API.CONSUMER.MSG.NEXT"
-	JSApiRequestNextT                 = "$JS.API.CONSUMER.MSG.NEXT.%s.%s"
-
-	JSAdvisoryConsumerMaxDeliveryExceedPre = JSAdvisoryPrefix + ".CONSUMER.MAX_DELIVERIES"
+	JSApiConsumerCreateT                   = "$JS.API.CONSUMER.CREATE.%s"
+	JSApiConsumerCreate                    = "$JS.API.CONSUMER.CREATE.*"
+	JSApiConsumerCreateWithNameT           = "$JS.API.CONSUMER.CREATE.%s.%s"
+	JSApiConsumerCreateWithName            = "$JS.API.CONSUMER.CREATE.*.>"
+	JSApiDurableCreateT                    = "$JS.API.CONSUMER.DURABLE.CREATE.%s.%s"
+	JSApiDurableCreate                     = "$JS.API.CONSUMER.DURABLE.CREATE.*.*"
+	JSApiConsumerCreateExT                 = "$JS.API.CONSUMER.CREATE.%s.%s.%s"
+	JSApiConsumerCreateEx                  = "$JS.API.CONSUMER.CREATE.%s.*.>"
+	JSApiConsumerNamesT                    = "$JS.API.CONSUMER.NAMES.%s"
+	JSApiConsumerNames                     = "$JS.API.CONSUMER.NAMES.*"
+	JSApiConsumerListT                     = "$JS.API.CONSUMER.LIST.%s"
+	JSApiConsumerList                      = "$JS.API.CONSUMER.LIST.*"
+	JSApiConsumerInfoT                     = "$JS.API.CONSUMER.INFO.%s.%s"
+	JSApiConsumerDeleteT                   = "$JS.API.CONSUMER.DELETE.%s.%s"
+	JSApiRequestNextT                      = "$JS.API.CONSUMER.MSG.NEXT.%s.%s"
+	JSApiRequestNext                       = "$JS.API.CONSUMER.MSG.NEXT.*.*"
+	JSApiConsumerLeaderStepDownT           = "$JS.API.CONSUMER.LEADER.STEPDOWN.%s.%s"
+	JSApiConsumerPauseT                    = "$JS.API.CONSUMER.PAUSE.%s.%s"
+	JSApiConsumerUnpinT                    = "$JS.API.CONSUMER.UNPIN.%s.%s"
 	JSMetricConsumerAckPre                 = JSMetricPrefix + ".CONSUMER.ACK"
+	JSAdvisoryConsumerMaxDeliveryExceedPre = JSAdvisoryPrefix + ".CONSUMER.MAX_DELIVERIES"
 )
 
 type ConsumerAction int
@@ -172,9 +156,8 @@ type JSApiConsumerListRequest struct {
 type JSApiConsumerListResponse struct {
 	JSApiResponse
 	JSApiIterableResponse
-	Consumers []*ConsumerInfo   `json:"consumers"`
-	Missing   []string          `json:"missing,omitempty"`
-	Offline   map[string]string `json:"offline,omitempty"`
+	Consumers []*ConsumerInfo `json:"consumers"`
+	Missing   []string        `json:"missing,omitempty"`
 }
 
 // io.nats.jetstream.api.v1.consumer_leader_stepdown_request
@@ -190,7 +173,7 @@ type JSApiConsumerLeaderStepDownResponse struct {
 
 // io.nats.jetstream.api.v1.consumer_pause_request
 type JSApiConsumerPauseRequest struct {
-	PauseUntil time.Time `json:"pause_until,omitempty" api_level:"1"`
+	PauseUntil time.Time `json:"pause_until,omitempty"`
 }
 
 // io.nats.jetstream.api.v1.consumer_pause_response
@@ -467,7 +450,6 @@ const (
 	PriorityNone PriorityPolicy = iota
 	PriorityOverflow
 	PriorityPinnedClient
-	PriorityPrioritized
 )
 
 func (p PriorityPolicy) String() string {
@@ -476,8 +458,6 @@ func (p PriorityPolicy) String() string {
 		return "Overflow"
 	case PriorityPinnedClient:
 		return "Pinned Client"
-	case PriorityPrioritized:
-		return "Prioritized"
 	default:
 		return "None"
 	}
@@ -491,8 +471,6 @@ func (p *PriorityPolicy) UnmarshalYAML(data *yaml.Node) error {
 		*p = PriorityOverflow
 	case "pinned_client":
 		*p = PriorityPinnedClient
-	case "prioritized":
-		*p = PriorityPrioritized
 	default:
 		return fmt.Errorf("cannot unmarshal %v", data.Value)
 	}
@@ -507,8 +485,6 @@ func (p PriorityPolicy) MarshalYAML() (any, error) {
 		return "overflow", nil
 	case PriorityPinnedClient:
 		return "pinned_client", nil
-	case PriorityPrioritized:
-		return "prioritized", nil
 	default:
 		return nil, fmt.Errorf("unknown priority policy: %v", p)
 	}
@@ -522,8 +498,6 @@ func (p *PriorityPolicy) UnmarshalJSON(data []byte) error {
 		*p = PriorityOverflow
 	case jsonString("pinned_client"):
 		*p = PriorityPinnedClient
-	case jsonString("prioritized"):
-		*p = PriorityPrioritized
 	default:
 		return fmt.Errorf("cannot unmarshal %v", string(data))
 	}
@@ -538,8 +512,6 @@ func (p PriorityPolicy) MarshalJSON() ([]byte, error) {
 		return json.Marshal("overflow")
 	case PriorityPinnedClient:
 		return json.Marshal("pinned_client")
-	case PriorityPrioritized:
-		return json.Marshal("prioritized")
 	default:
 		return nil, fmt.Errorf("unknown priority policy: %v", p)
 	}
@@ -581,38 +553,15 @@ type ConsumerConfig struct {
 	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata"`
 
 	// PauseUntil is for suspending the consumer until the deadline.
-	PauseUntil time.Time `json:"pause_until,omitempty" yaml:"pause_until" api_level:"1"`
+	PauseUntil time.Time `json:"pause_until,omitempty" yaml:"pause_until"`
 
 	// Priority groups
-	PriorityGroups []string       `json:"priority_groups,omitempty" yaml:"priority_groups" api_level:"1"`
+	PriorityGroups []string       `json:"priority_groups,omitempty" yaml:"priority_groups"`
 	PriorityPolicy PriorityPolicy `json:"priority_policy,omitempty" yaml:"priority_policy"`
 	PinnedTTL      time.Duration  `json:"priority_timeout,omitempty" yaml:"priority_timeout"`
 
 	// Don't add to general clients.
 	Direct bool `json:"direct,omitempty" yaml:"direct"`
-}
-
-func (c ConsumerConfig) RequiredApiLevel() (int, error) {
-	maxRequired := 0
-
-	// 2.12 introduced a new PriorityPolicy value so we cant rely on just the api tags
-	// here we set the minimum to 2 when needed
-	if c.PriorityPolicy == PriorityPrioritized {
-		maxRequired = 2
-	}
-
-	// we check the rest of the struct as normal
-	required, err := requiredApiLevel(c, true)
-	if err != nil {
-		return 0, err
-	}
-
-	// and take the higher of the two
-	if required > maxRequired {
-		maxRequired = required
-	}
-
-	return maxRequired, nil
 }
 
 // SequenceInfo is the consumer and stream sequence that uniquely identify a message
@@ -653,16 +602,11 @@ type PriorityGroupState struct {
 //
 // NATS Schema Type io.nats.jetstream.api.v1.consumer_getnext_request
 type JSApiConsumerGetNextRequest struct {
-	Expires       time.Duration `json:"expires,omitempty"`
-	Batch         int           `json:"batch,omitempty"`
-	MaxBytes      int           `json:"max_bytes,omitempty"`
-	NoWait        bool          `json:"no_wait,omitempty"`
-	Heartbeat     time.Duration `json:"idle_heartbeat,omitempty"`
-	Group         string        `json:"group,omitempty"`
-	MinPending    int64         `json:"min_pending,omitempty"`
-	MinAckPending int64         `json:"min_ack_pending,omitempty"`
-	Id            string        `json:"id,omitempty"`
-	Priority      int           `json:"priority,omitempty"`
+	Expires   time.Duration `json:"expires,omitempty"`
+	Batch     int           `json:"batch,omitempty"`
+	MaxBytes  int           `json:"max_bytes,omitempty"`
+	NoWait    bool          `json:"no_wait,omitempty"`
+	Heartbeat time.Duration `json:"idle_heartbeat,omitempty"`
 }
 
 // ConsumerNakOptions is for optional NAK parameters, e.g. delay.

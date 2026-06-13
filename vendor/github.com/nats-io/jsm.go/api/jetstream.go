@@ -17,18 +17,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"strconv"
-	"strings"
 )
 
 // Subjects used by the JetStream API
 const (
-	JSAuditAdvisory        = "$JS.EVENT.ADVISORY.API"
-	JSMetricPrefix         = "$JS.EVENT.METRIC"
-	JSAdvisoryPrefix       = "$JS.EVENT.ADVISORY"
-	JSApiAccountInfo       = "$JS.API.INFO"
-	JSApiAccountInfoPrefix = "$JS.API.INFO"
+	JSAuditAdvisory  = "$JS.EVENT.ADVISORY.API"
+	JSMetricPrefix   = "$JS.EVENT.METRIC"
+	JSAdvisoryPrefix = "$JS.EVENT.ADVISORY"
+	JSApiAccountInfo = "$JS.API.INFO"
 
 	// also update FilterServerMetadata when this changes
 
@@ -74,18 +71,6 @@ const (
 
 	// JSMessageTTL sets a TTL per message
 	JSMessageTTL = "Nats-TTL"
-
-	// JSSchedulePattern holds a message schedule pattern
-	JSSchedulePattern = "Nats-Schedule"
-
-	// JSScheduleTTL sets a TTL on the produced message
-	JSScheduleTTL = "Nats-Schedule-TTL"
-
-	// JSScheduleTarget sets the target subject for the produced message
-	JSScheduleTarget = "Nats-Schedule-Target"
-
-	// JSRequiredApiLevel indicates that a request requires a certain API level
-	JSRequiredApiLevel = "Nats-Required-Api-Level"
 )
 
 type JSApiIterableRequest struct {
@@ -247,87 +232,4 @@ func IsNatsErr(err error, ids ...uint16) bool {
 	}
 
 	return false
-}
-
-// ApiLevelAware is an interface that can be implemented by a struct to indicate that it requires a specific JetStream API level.
-type ApiLevelAware interface {
-	RequiredApiLevel() (int, error)
-}
-
-// RequiredApiLevel determines the JetStream API level required by a struct, typically a JetStream API Request
-// when a structure implement the ApiLevelAware interface that function will be called instead
-func RequiredApiLevel(req any) (int, error) {
-	return requiredApiLevel(req, false)
-}
-
-// determines the api level from struct tags.
-//
-// it supports calling the struct RequiredApiLevel() function if present unless skip is given
-//
-// the idea here is that for fields that are new we would mark them up with the api level
-// and then we can use this function to determine the required level for a request
-//
-// for cases where we introduce a change of behavior on a field structs can handle that in their RequiredApiLevel()
-// and then call into this function with skip true to determin the level for the rest of the struct, see
-// ConsumerConfig for an example of this.
-func requiredApiLevel(req any, skip bool) (int, error) {
-	val := reflect.ValueOf(req)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	if !val.IsValid() {
-		return 0, nil
-	}
-
-	checker, ok := val.Interface().(ApiLevelAware)
-	if !skip && ok {
-		return checker.RequiredApiLevel()
-	}
-
-	// we only check structs
-	if val.Kind() != reflect.Struct {
-		return 0, nil
-	}
-
-	maxLevel := 0
-
-	for i := 0; i < val.NumField(); i++ {
-		typeField := val.Type().Field(i)
-		valueField := val.Field(i)
-
-		// zero generally means unset so we skip it
-		if valueField.IsZero() {
-			continue
-		}
-
-		// if its a struct we recurse into it and check all its fields
-		if valueField.Kind() == reflect.Struct {
-			lvl, err := requiredApiLevel(valueField.Interface(), skip)
-			if err != nil {
-				return 0, err
-			}
-			if maxLevel < lvl {
-				maxLevel = lvl
-			}
-
-			continue
-		}
-
-		apiLevel := strings.TrimSpace(typeField.Tag.Get("api_level"))
-		if apiLevel == "" {
-			continue
-		}
-
-		lvl, err := strconv.Atoi(apiLevel)
-		if err != nil {
-			return 0, fmt.Errorf("invalid api_level tag %q for field %s on type %s", apiLevel, typeField.Name, val.Type().Name())
-		}
-
-		if maxLevel < lvl {
-			maxLevel = lvl
-		}
-	}
-
-	return maxLevel, nil
 }

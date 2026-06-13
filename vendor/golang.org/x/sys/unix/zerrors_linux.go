@@ -1228,10 +1228,7 @@ const (
 	ETH_P_WCCP                                  = 0x883e
 	ETH_P_X25                                   = 0x805
 	ETH_P_XDSA                                  = 0xf8
-<<<<<<< HEAD
 	ETH_P_YT921X                                = 0x9988
-=======
->>>>>>> main
 	ET_CORE                                     = 0x4
 	ET_DYN                                      = 0x3
 	ET_EXEC                                     = 0x2
@@ -1924,10 +1921,7 @@ const (
 	LANDLOCK_RESTRICT_SELF_LOG_NEW_EXEC_ON      = 0x2
 	LANDLOCK_RESTRICT_SELF_LOG_SAME_EXEC_OFF    = 0x1
 	LANDLOCK_RESTRICT_SELF_LOG_SUBDOMAINS_OFF   = 0x4
-<<<<<<< HEAD
 	LANDLOCK_RESTRICT_SELF_TSYNC                = 0x8
-=======
->>>>>>> main
 	LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET         = 0x1
 	LANDLOCK_SCOPE_SIGNAL                       = 0x2
 	LINUX_REBOOT_CMD_CAD_OFF                    = 0x0
@@ -2435,10 +2429,7 @@ const (
 	NN_PRXFPREG                                 = "LINUX"
 	NN_RISCV_CSR                                = "LINUX"
 	NN_RISCV_TAGGED_ADDR_CTRL                   = "LINUX"
-<<<<<<< HEAD
 	NN_RISCV_USER_CFI                           = "LINUX"
-=======
->>>>>>> main
 	NN_RISCV_VECTOR                             = "LINUX"
 	NN_S390_CTRS                                = "LINUX"
 	NN_S390_GS_BC                               = "LINUX"
@@ -2520,10 +2511,7 @@ const (
 	NT_PRXFPREG                                 = 0x46e62b7f
 	NT_RISCV_CSR                                = 0x900
 	NT_RISCV_TAGGED_ADDR_CTRL                   = 0x902
-<<<<<<< HEAD
 	NT_RISCV_USER_CFI                           = 0x903
-=======
->>>>>>> main
 	NT_RISCV_VECTOR                             = 0x901
 	NT_S390_CTRS                                = 0x304
 	NT_S390_GS_BC                               = 0x30c
@@ -2546,10 +2534,7 @@ const (
 	NT_X86_SHSTK                                = 0x204
 	NT_X86_XSAVE_LAYOUT                         = 0x205
 	NT_X86_XSTATE                               = 0x202
-<<<<<<< HEAD
 	NULL_FS_MAGIC                               = 0x4e554c4c
-=======
->>>>>>> main
 	OCFS2_SUPER_MAGIC                           = 0x7461636f
 	OCRNL                                       = 0x8
 	OFDEL                                       = 0x80
@@ -3023,10 +3008,7 @@ const (
 	PR_TAGGED_ADDR_ENABLE                       = 0x1
 	PR_TASK_PERF_EVENTS_DISABLE                 = 0x1f
 	PR_TASK_PERF_EVENTS_ENABLE                  = 0x20
-<<<<<<< HEAD
 	PR_THP_DISABLE_EXCEPT_ADVISED               = 0x2
-=======
->>>>>>> main
 	PR_TIMER_CREATE_RESTORE_IDS                 = 0x4d
 	PR_TIMER_CREATE_RESTORE_IDS_GET             = 0x2
 	PR_TIMER_CREATE_RESTORE_IDS_OFF             = 0x0
@@ -3405,11 +3387,7 @@ const (
 	RWF_NOAPPEND                                = 0x20
 	RWF_NOSIGNAL                                = 0x100
 	RWF_NOWAIT                                  = 0x8
-<<<<<<< HEAD
 	RWF_SUPPORTED                               = 0x1ff
-=======
-	RWF_SUPPORTED                               = 0xff
->>>>>>> main
 	RWF_SYNC                                    = 0x4
 	RWF_WRITE_LIFE_NOT_SET                      = 0x0
 	SCHED_BATCH                                 = 0x3
@@ -3792,11 +3770,7 @@ const (
 	TASKSTATS_GENL_NAME                         = "TASKSTATS"
 	TASKSTATS_GENL_VERSION                      = 0x1
 	TASKSTATS_TYPE_MAX                          = 0x6
-<<<<<<< HEAD
 	TASKSTATS_VERSION                           = 0x11
-=======
-	TASKSTATS_VERSION                           = 0x10
->>>>>>> main
 	TCIFLUSH                                    = 0x0
 	TCIOFF                                      = 0x2
 	TCIOFLUSH                                   = 0x2

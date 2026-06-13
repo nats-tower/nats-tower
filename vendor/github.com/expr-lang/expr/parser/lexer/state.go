@@ -6,9 +6,9 @@ import (
 	"github.com/expr-lang/expr/parser/utils"
 )
 
-type stateFn func(*Lexer) stateFn
+type stateFn func(*lexer) stateFn
 
-func root(l *Lexer) stateFn {
+func root(l *lexer) stateFn {
 	switch r := l.next(); {
 	case r == eof:
 		l.emitEOF()
@@ -61,7 +61,7 @@ func root(l *Lexer) stateFn {
 	return root
 }
 
-func number(l *Lexer) stateFn {
+func number(l *lexer) stateFn {
 	if !l.scanNumber() {
 		return l.error("bad number syntax: %q", l.word())
 	}
@@ -69,7 +69,7 @@ func number(l *Lexer) stateFn {
 	return root
 }
 
-func (l *Lexer) scanNumber() bool {
+func (l *lexer) scanNumber() bool {
 	digits := "0123456789_"
 	// Is it hex?
 	if l.accept("0") {
@@ -107,7 +107,7 @@ func (l *Lexer) scanNumber() bool {
 	return true
 }
 
-func dot(l *Lexer) stateFn {
+func dot(l *lexer) stateFn {
 	l.next()
 	if l.accept("0123456789") {
 		l.backup()
@@ -118,7 +118,7 @@ func dot(l *Lexer) stateFn {
 	return root
 }
 
-func identifier(l *Lexer) stateFn {
+func identifier(l *lexer) stateFn {
 loop:
 	for {
 		switch r := l.next(); {
@@ -129,14 +129,8 @@ loop:
 			switch l.word() {
 			case "not":
 				return not
-			case "in", "or", "and", "matches", "contains", "startsWith", "endsWith", "let":
+			case "in", "or", "and", "matches", "contains", "startsWith", "endsWith", "let", "if", "else":
 				l.emit(Operator)
-			case "if", "else":
-				if !l.DisableIfOperator {
-					l.emit(Operator)
-				} else {
-					l.emit(Identifier)
-				}
 			default:
 				l.emit(Identifier)
 			}
@@ -146,7 +140,7 @@ loop:
 	return root
 }
 
-func not(l *Lexer) stateFn {
+func not(l *lexer) stateFn {
 	l.emit(Operator)
 
 	l.skipSpaces()
@@ -173,13 +167,13 @@ func not(l *Lexer) stateFn {
 	return root
 }
 
-func questionMark(l *Lexer) stateFn {
+func questionMark(l *lexer) stateFn {
 	l.accept(".?")
 	l.emit(Operator)
 	return root
 }
 
-func slash(l *Lexer) stateFn {
+func slash(l *lexer) stateFn {
 	if l.accept("/") {
 		return singleLineComment
 	}
@@ -190,7 +184,7 @@ func slash(l *Lexer) stateFn {
 	return root
 }
 
-func singleLineComment(l *Lexer) stateFn {
+func singleLineComment(l *lexer) stateFn {
 	for {
 		r := l.next()
 		if r == eof || r == '\n' {
@@ -201,7 +195,7 @@ func singleLineComment(l *Lexer) stateFn {
 	return root
 }
 
-func multiLineComment(l *Lexer) stateFn {
+func multiLineComment(l *lexer) stateFn {
 	for {
 		r := l.next()
 		if r == eof {
@@ -215,7 +209,7 @@ func multiLineComment(l *Lexer) stateFn {
 	return root
 }
 
-func pointer(l *Lexer) stateFn {
+func pointer(l *lexer) stateFn {
 	l.accept("#")
 	l.emit(Operator)
 	for {

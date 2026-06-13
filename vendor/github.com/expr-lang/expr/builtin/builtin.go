@@ -3,7 +3,6 @@ package builtin
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -17,10 +16,6 @@ import (
 var (
 	Index map[string]int
 	Names []string
-
-	// MaxDepth limits the recursion depth for nested structures.
-	MaxDepth      = 10000
-	ErrorMaxDepth = errors.New("recursion depth exceeded")
 )
 
 func init() {
@@ -382,7 +377,7 @@ var Builtins = []*Function{
 	{
 		Name: "max",
 		Func: func(args ...any) (any, error) {
-			return minMax("max", runtime.Less, 0, args...)
+			return minMax("max", runtime.Less, args...)
 		},
 		Validate: func(args []reflect.Type) (reflect.Type, error) {
 			return validateAggregateFunc("max", args)
@@ -391,7 +386,7 @@ var Builtins = []*Function{
 	{
 		Name: "min",
 		Func: func(args ...any) (any, error) {
-			return minMax("min", runtime.More, 0, args...)
+			return minMax("min", runtime.More, args...)
 		},
 		Validate: func(args []reflect.Type) (reflect.Type, error) {
 			return validateAggregateFunc("min", args)
@@ -400,7 +395,7 @@ var Builtins = []*Function{
 	{
 		Name: "mean",
 		Func: func(args ...any) (any, error) {
-			count, sum, err := mean(0, args...)
+			count, sum, err := mean(args...)
 			if err != nil {
 				return nil, err
 			}
@@ -416,7 +411,7 @@ var Builtins = []*Function{
 	{
 		Name: "median",
 		Func: func(args ...any) (any, error) {
-			values, err := median(0, args...)
+			values, err := median(args...)
 			if err != nil {
 				return nil, err
 			}
@@ -945,10 +940,7 @@ var Builtins = []*Function{
 			if v.Kind() != reflect.Array && v.Kind() != reflect.Slice {
 				return nil, size, fmt.Errorf("cannot flatten %s", v.Kind())
 			}
-			ret, err := flatten(v, 0)
-			if err != nil {
-				return nil, 0, err
-			}
+			ret := flatten(v)
 			size = uint(len(ret))
 			return ret, size, nil
 		},

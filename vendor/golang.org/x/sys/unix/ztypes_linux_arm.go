@@ -345,7 +345,6 @@ type Taskstats struct {
 	Wpcopy_delay_min          uint64
 	Irq_delay_max             uint64
 	Irq_delay_min             uint64
-<<<<<<< HEAD
 	Cpu_delay_max_ts          KernelTimespec
 	Blkio_delay_max_ts        KernelTimespec
 	Swapin_delay_max_ts       KernelTimespec
@@ -354,8 +353,6 @@ type Taskstats struct {
 	Compact_delay_max_ts      KernelTimespec
 	Wpcopy_delay_max_ts       KernelTimespec
 	Irq_delay_max_ts          KernelTimespec
-=======
->>>>>>> main
 }
 
 type cpuMask uint32

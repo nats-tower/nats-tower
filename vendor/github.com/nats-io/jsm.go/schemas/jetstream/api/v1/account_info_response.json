@@ -80,8 +80,7 @@
             },
             "max_ack_pending": {
               "type": "integer",
-              "description": "The maximum number of outstanding ACKs any consumer may configure",
-              "minimum": -1
+              "description": "The maximum number of outstanding ACKs any consumer may configure"
             },
             "memory_max_stream_bytes": {
               "type": "integer",
@@ -177,8 +176,7 @@
                     },
                     "max_ack_pending": {
                       "type": "integer",
-                      "description": "The maximum number of outstanding ACKs any consumer may configure",
-                      "minimum": -1
+                      "description": "The maximum number of outstanding ACKs any consumer may configure"
                     },
                     "memory_max_stream_bytes": {
                       "type": "integer",

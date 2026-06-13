@@ -1,4 +1,4 @@
-// Copyright 2025 The NATS Authors
+// Copyright 2020-2022 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,27 +11,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build illumos || solaris
+//go:build gofuzz
 
-package sysmem
+package server
 
-import (
-	"golang.org/x/sys/unix"
-)
+var defaultFuzzServerOptions = Options{
+	Host:                  "127.0.0.1",
+	Trace:                 true,
+	Debug:                 true,
+	DisableShortFirstPing: true,
+	NoLog:                 true,
+	NoSigs:                true,
+}
 
-const (
-	_SC_PHYS_PAGES = 500
-	_SC_PAGESIZE   = 11
-)
+func dummyFuzzClient() *client {
+	return &client{srv: New(&defaultFuzzServerOptions), msubs: -1, mpay: MAX_PAYLOAD_SIZE, mcl: MAX_CONTROL_LINE_SIZE}
+}
 
-func Memory() int64 {
-	pages, err := unix.Sysconf(_SC_PHYS_PAGES)
+func FuzzClient(data []byte) int {
+	if len(data) < 100 {
+		return -1
+	}
+	c := dummyFuzzClient()
+
+	err := c.parse(data[:50])
 	if err != nil {
 		return 0
 	}
-	pageSize, err := unix.Sysconf(_SC_PAGESIZE)
+
+	err = c.parse(data[50:])
 	if err != nil {
 		return 0
 	}
-	return int64(pages) * int64(pageSize)
+	return 1
 }

@@ -6,17 +6,9 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sync"
 
 	"github.com/expr-lang/expr/internal/deref"
 )
-
-var fieldCache sync.Map
-
-type fieldCacheKey struct {
-	t reflect.Type
-	f string
-}
 
 func Fetch(from, i any) any {
 	v := reflect.ValueOf(from)
@@ -71,31 +63,15 @@ func Fetch(from, i any) any {
 
 	case reflect.Struct:
 		fieldName := i.(string)
-		t := v.Type()
-		key := fieldCacheKey{
-			t: t,
-			f: fieldName,
-		}
-		if cv, ok := fieldCache.Load(key); ok {
-			return v.FieldByIndex(cv.([]int)).Interface()
-		}
-		field, ok := t.FieldByNameFunc(func(name string) bool {
-			field, _ := t.FieldByName(name)
-			switch field.Tag.Get("expr") {
-			case "-":
-				return false
-			case fieldName:
+		value := v.FieldByNameFunc(func(name string) bool {
+			field, _ := v.Type().FieldByName(name)
+			if field.Tag.Get("expr") == fieldName {
 				return true
-			default:
-				return name == fieldName
 			}
+			return name == fieldName
 		})
-		if ok {
-			value := v.FieldByIndex(field.Index)
-			if value.IsValid() {
-				fieldCache.Store(key, field.Index)
-				return value.Interface()
-			}
+		if value.IsValid() {
+			return value.Interface()
 		}
 	}
 	panic(fmt.Sprintf("cannot fetch %v from %T", i, from))
@@ -186,11 +162,6 @@ func Slice(array, from, to any) any {
 		if a > b {
 			a = b
 		}
-		if v.Kind() == reflect.Array && !v.CanAddr() {
-			newValue := reflect.New(v.Type()).Elem()
-			newValue.Set(v)
-			v = newValue
-		}
 		value := v.Slice(a, b)
 		if value.IsValid() {
 			return value.Interface()
@@ -242,11 +213,7 @@ func In(needle any, array any) bool {
 		if !n.IsValid() || n.Kind() != reflect.String {
 			panic(fmt.Sprintf("cannot use %T as field name of %T", needle, array))
 		}
-		field, ok := v.Type().FieldByName(n.String())
-		if !ok || !field.IsExported() || field.Tag.Get("expr") == "-" {
-			return false
-		}
-		value := v.FieldByIndex(field.Index)
+		value := v.FieldByName(n.String())
 		if value.IsValid() {
 			return true
 		}
@@ -410,18 +377,6 @@ func ToFloat64(a any) float64 {
 		return float64(x)
 	default:
 		panic(fmt.Sprintf("invalid operation: float(%T)", x))
-	}
-}
-
-func ToBool(a any) bool {
-	if a == nil {
-		return false
-	}
-	switch x := a.(type) {
-	case bool:
-		return x
-	default:
-		panic(fmt.Sprintf("invalid operation: bool(%T)", x))
 	}
 }
 
