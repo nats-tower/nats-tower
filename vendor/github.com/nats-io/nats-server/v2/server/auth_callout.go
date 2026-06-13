@@ -1,4 +1,4 @@
-// Copyright 2022-2024 The NATS Authors
+// Copyright 2022-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,6 +31,14 @@ const (
 	AuthRequestSubject    = "nats-authorization-request"
 	AuthRequestXKeyHeader = "Nats-Server-Xkey"
 )
+
+func titleCase(m string) string {
+	r := []rune(m)
+	if len(r) == 0 {
+		return _EMPTY_
+	}
+	return string(append([]rune{unicode.ToUpper(r[0])}, r[1:]...))
+}
 
 // Process a callout on this client's behalf.
 func (s *Server) processClientOrLeafCallout(c *client, opts *Options) (authorized bool, errStr string) {
@@ -66,9 +74,6 @@ func (s *Server) processClientOrLeafCallout(c *client, opts *Options) (authorize
 		xkp, xkey = s.xkp, s.info.XKey
 	}
 
-	// FIXME: so things like the server ID that get assigned, are used as a sort of nonce - but
-	//  reality is that the keypair here, is generated, so the response generated a JWT has to be
-	//  this user - no replay possible
 	// Create a keypair for the user. We will expect this public user to be in the signed response.
 	// This prevents replay attacks.
 	ukp, _ := nkeys.CreateUser()
@@ -234,11 +239,6 @@ func (s *Server) processClientOrLeafCallout(c *client, opts *Options) (authorize
 	}
 
 	processReply := func(_ *subscription, rc *client, racc *Account, subject, reply string, rmsg []byte) {
-		titleCase := func(m string) string {
-			r := []rune(m)
-			return string(append([]rune{unicode.ToUpper(r[0])}, r[1:]...))
-		}
-
 		arc, err := decodeResponse(rc, rmsg, racc)
 		if err != nil {
 			c.authViolation()
@@ -403,7 +403,7 @@ func (s *Server) processClientOrLeafCallout(c *client, opts *Options) (authorize
 		return false, errStr
 	}
 	req := []byte(b)
-	var hdr map[string]string
+	var hdr []byte
 
 	// Check if we have been asked to encrypt.
 	if xkp != nil {
@@ -413,7 +413,7 @@ func (s *Server) processClientOrLeafCallout(c *client, opts *Options) (authorize
 			s.Warnf(errStr)
 			return false, errStr
 		}
-		hdr = map[string]string{AuthRequestXKeyHeader: xkey}
+		hdr = genHeader(hdr, AuthRequestXKeyHeader, xkey)
 	}
 
 	// Send out our request.

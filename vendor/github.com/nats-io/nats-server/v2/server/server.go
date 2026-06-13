@@ -16,6 +16,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/fips140"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -41,6 +42,8 @@ import (
 
 	// Allow dynamic profiling.
 	_ "net/http/pprof"
+
+	"expvar"
 
 	"github.com/klauspost/compress/s2"
 	"github.com/nats-io/jwt/v2"
@@ -389,7 +392,6 @@ type nodeInfo struct {
 	accountNRG      bool
 }
 
-// Make sure all are 64bits for atomic use
 type stats struct {
 	inMsgs        int64
 	outMsgs       int64
@@ -671,8 +673,12 @@ func NewServer(opts *Options) (*Server, error) {
 	pub, _ := kp.PublicKey()
 
 	// Create an xkey for encrypting messages from this server.
-	xkp, _ := nkeys.CreateCurveKeys()
-	xpub, _ := xkp.PublicKey()
+	var xkp nkeys.KeyPair
+	var xpub string
+	if !fips140.Enabled() {
+		xkp, _ = nkeys.CreateCurveKeys()
+		xpub, _ = xkp.PublicKey()
+	}
 
 	serverName := pub
 	if opts.ServerName != _EMPTY_ {
@@ -779,15 +785,18 @@ func NewServer(opts *Options) (*Server, error) {
 	if opts.JetStream {
 		ourNode := getHash(serverName)
 		s.nodeToInfo.Store(ourNode, nodeInfo{
-			serverName,
-			VERSION,
-			opts.Cluster.Name,
-			opts.JetStreamDomain,
-			info.ID,
-			opts.Tags,
-			&JetStreamConfig{MaxMemory: opts.JetStreamMaxMemory, MaxStore: opts.JetStreamMaxStore, CompressOK: true},
-			nil,
-			false, true, true, true,
+			name:            serverName,
+			version:         VERSION,
+			cluster:         opts.Cluster.Name,
+			domain:          opts.JetStreamDomain,
+			id:              info.ID,
+			tags:            opts.Tags,
+			cfg:             &JetStreamConfig{MaxMemory: opts.JetStreamMaxMemory, MaxStore: opts.JetStreamMaxStore, CompressOK: true},
+			stats:           nil,
+			offline:         false,
+			js:              true,
+			binarySnapshots: true,
+			accountNRG:      true,
 		})
 	}
 
@@ -1014,8 +1023,8 @@ func (s *Server) serverName() string {
 	return s.getOpts().ServerName
 }
 
-// ClientURL returns the URL used to connect clients. Helpful in testing
-// when we designate a random client port (-1).
+// ClientURL returns the URL used to connect clients.
+// Helpful in tests and with in-process servers using a random client port (-1).
 func (s *Server) ClientURL() string {
 	// FIXME(dlc) - should we add in user and pass if defined single?
 	opts := s.getOpts()
@@ -1025,6 +1034,19 @@ func (s *Server) ClientURL() string {
 		u.Scheme = "tls"
 	}
 	u.Host = net.JoinHostPort(opts.Host, fmt.Sprintf("%d", opts.Port))
+	return u.String()
+}
+
+// WebsocketURL returns the URL used to connect websocket clients.
+// Helpful in tests and with in-process servers using a random websocket port (-1).
+func (s *Server) WebsocketURL() string {
+	opts := s.getOpts()
+	var u url.URL
+	u.Scheme = "ws"
+	if opts.Websocket.TLSConfig != nil {
+		u.Scheme = "wss"
+	}
+	u.Host = net.JoinHostPort(opts.Websocket.Host, fmt.Sprintf("%d", opts.Websocket.Port))
 	return u.String()
 }
 
@@ -2705,7 +2727,7 @@ func (s *Server) AcceptLoop(clr chan struct{}) {
 	// Setup state that can enable shutdown
 	s.mu.Lock()
 	hp := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
-	l, e := natsListen("tcp", hp)
+	l, e := s.getServerListener(hp)
 	s.listenerErr = e
 	if e != nil {
 		s.mu.Unlock()
@@ -2759,6 +2781,18 @@ func (s *Server) AcceptLoop(clr chan struct{}) {
 	// Let the caller know that we are ready
 	close(clr)
 	clr = nil
+}
+
+// getServerListener returns a network listener for the given host-port address.
+// If the Server already has an active listener (s.listener), it returns that listener
+// along with any previous error (s.listenerErr). Otherwise, it creates and returns
+// a new TCP listener on the specified address using natsListen.
+func (s *Server) getServerListener(hp string) (net.Listener, error) {
+	if s.listener != nil {
+		return s.listener, s.listenerErr
+	}
+
+	return natsListen("tcp", hp)
 }
 
 // InProcessConn returns an in-process connection to the server,
@@ -2939,6 +2973,7 @@ const (
 	HealthzPath      = "/healthz"
 	IPQueuesPath     = "/ipqueuesz"
 	RaftzPath        = "/raftz"
+	ExpvarzPath      = "/debug/vars"
 )
 
 func (s *Server) basePath(p string) string {
@@ -3057,6 +3092,8 @@ func (s *Server) startMonitoring(secure bool) error {
 	mux.HandleFunc(s.basePath(IPQueuesPath), s.HandleIPQueuesz)
 	// Raftz
 	mux.HandleFunc(s.basePath(RaftzPath), s.HandleRaftz)
+	// Expvarz
+	mux.Handle(s.basePath(ExpvarzPath), expvar.Handler())
 
 	// Do not set a WriteTimeout because it could cause cURL/browser
 	// to return empty response or unable to display page if the

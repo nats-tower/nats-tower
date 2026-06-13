@@ -1,5 +1,7 @@
-# github.com/antithesishq/antithesis-sdk-go v0.5.0
+# github.com/antithesishq/antithesis-sdk-go v0.6.0-default-no-op
 ## explicit; go 1.20
+github.com/antithesishq/antithesis-sdk-go/assert
+github.com/antithesishq/antithesis-sdk-go/internal
 # github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 ## explicit; go 1.13
 github.com/asaskevich/govalidator
@@ -65,7 +67,7 @@ github.com/go-ozzo/ozzo-validation/v4/is
 # github.com/golang-jwt/jwt/v5 v5.3.1
 ## explicit; go 1.21
 github.com/golang-jwt/jwt/v5
-# github.com/google/go-tpm v0.9.5
+# github.com/google/go-tpm v0.9.8
 ## explicit; go 1.22
 github.com/google/go-tpm/legacy/tpm2
 github.com/google/go-tpm/tpmutil
@@ -76,7 +78,7 @@ github.com/google/uuid
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
-# github.com/klauspost/compress v1.18.2
+# github.com/klauspost/compress v1.18.4
 ## explicit; go 1.23
 github.com/klauspost/compress/flate
 github.com/klauspost/compress/internal/le
@@ -88,7 +90,7 @@ github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.22
 ## explicit; go 1.21
 github.com/mattn/go-isatty
-# github.com/minio/highwayhash v1.0.3
+# github.com/minio/highwayhash v1.0.4-0.20251030100505-070ab1a87a76
 ## explicit; go 1.15
 github.com/minio/highwayhash
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -108,8 +110,8 @@ github.com/nats-io/jsm.go/schemas
 # github.com/nats-io/jwt/v2 v2.8.2
 ## explicit; go 1.25.0
 github.com/nats-io/jwt/v2
-# github.com/nats-io/nats-server/v2 v2.11.4
-## explicit; go 1.23.0
+# github.com/nats-io/nats-server/v2 v2.11.15
+## explicit; go 1.25.0
 github.com/nats-io/nats-server/v2/conf
 github.com/nats-io/nats-server/v2/internal/fastrand
 github.com/nats-io/nats-server/v2/internal/ldap
@@ -125,8 +127,8 @@ github.com/nats-io/nats-server/v2/server/stree
 github.com/nats-io/nats-server/v2/server/sysmem
 github.com/nats-io/nats-server/v2/server/thw
 github.com/nats-io/nats-server/v2/server/tpm
-# github.com/nats-io/nats.go v1.42.0
-## explicit; go 1.23.0
+# github.com/nats-io/nats.go v1.49.0
+## explicit; go 1.24.0
 github.com/nats-io/nats.go
 github.com/nats-io/nats.go/encoders/builtin
 github.com/nats-io/nats.go/internal/parser
@@ -293,8 +295,8 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# golang.org/x/time v0.11.0
-## explicit; go 1.23.0
+# golang.org/x/time v0.15.0
+## explicit; go 1.25.0
 golang.org/x/time/rate
 # google.golang.org/protobuf v1.36.8
 ## explicit; go 1.23

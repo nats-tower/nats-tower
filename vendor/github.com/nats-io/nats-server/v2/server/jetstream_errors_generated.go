@@ -35,6 +35,9 @@ const (
 	// JSClusterRequiredErr JetStream clustering support required
 	JSClusterRequiredErr ErrorIdentifier = 10010
 
+	// JSClusterServerMemberChangeInflightErr cluster member change is in progress
+	JSClusterServerMemberChangeInflightErr ErrorIdentifier = 10202
+
 	// JSClusterServerNotMemberErr server is not a member of the cluster
 	JSClusterServerNotMemberErr ErrorIdentifier = 10044
 
@@ -176,6 +179,9 @@ const (
 	// JSConsumerOfflineErr consumer is offline
 	JSConsumerOfflineErr ErrorIdentifier = 10119
 
+	// JSConsumerOfflineReasonErrF consumer is offline: {err}
+	JSConsumerOfflineReasonErrF ErrorIdentifier = 10195
+
 	// JSConsumerOnMappedErr consumer direct on a mapped consumer
 	JSConsumerOnMappedErr ErrorIdentifier = 10092
 
@@ -196,6 +202,9 @@ const (
 
 	// JSConsumerPushMaxWaitingErr consumer in push mode can not set max waiting
 	JSConsumerPushMaxWaitingErr ErrorIdentifier = 10080
+
+	// JSConsumerPushWithPriorityGroupErr priority groups can not be used with push consumers
+	JSConsumerPushWithPriorityGroupErr ErrorIdentifier = 10178
 
 	// JSConsumerReplacementWithDifferentNameErr consumer replacement durable config not the same
 	JSConsumerReplacementWithDifferentNameErr ErrorIdentifier = 10106
@@ -437,6 +446,9 @@ const (
 	// JSStreamOfflineErr stream is offline
 	JSStreamOfflineErr ErrorIdentifier = 10118
 
+	// JSStreamOfflineReasonErrF stream is offline: {err}
+	JSStreamOfflineReasonErrF ErrorIdentifier = 10194
+
 	// JSStreamPurgeFailedF Generic stream purge failure error string ({err})
 	JSStreamPurgeFailedF ErrorIdentifier = 10110
 
@@ -516,6 +528,7 @@ var (
 		JSClusterNotLeaderErr:                      {Code: 500, ErrCode: 10009, Description: "JetStream cluster can not handle request"},
 		JSClusterPeerNotMemberErr:                  {Code: 400, ErrCode: 10040, Description: "peer not a member"},
 		JSClusterRequiredErr:                       {Code: 503, ErrCode: 10010, Description: "JetStream clustering support required"},
+		JSClusterServerMemberChangeInflightErr:     {Code: 400, ErrCode: 10202, Description: "cluster member change is in progress"},
 		JSClusterServerNotMemberErr:                {Code: 400, ErrCode: 10044, Description: "server is not a member of the cluster"},
 		JSClusterTagsErr:                           {Code: 400, ErrCode: 10011, Description: "tags placement not supported for operation"},
 		JSClusterUnSupportFeatureErr:               {Code: 503, ErrCode: 10036, Description: "not currently supported in clustered mode"},
@@ -563,6 +576,7 @@ var (
 		JSConsumerNameTooLongErrF:                  {Code: 400, ErrCode: 10102, Description: "consumer name is too long, maximum allowed is {max}"},
 		JSConsumerNotFoundErr:                      {Code: 404, ErrCode: 10014, Description: "consumer not found"},
 		JSConsumerOfflineErr:                       {Code: 500, ErrCode: 10119, Description: "consumer is offline"},
+		JSConsumerOfflineReasonErrF:                {Code: 500, ErrCode: 10195, Description: "consumer is offline: {err}"},
 		JSConsumerOnMappedErr:                      {Code: 400, ErrCode: 10092, Description: "consumer direct on a mapped consumer"},
 		JSConsumerOverlappingSubjectFilters:        {Code: 400, ErrCode: 10138, Description: "consumer subject filters cannot overlap"},
 		JSConsumerPriorityPolicyWithoutGroup:       {Code: 400, ErrCode: 10159, Description: "Setting PriorityPolicy requires at least one PriorityGroup to be set"},
@@ -570,6 +584,7 @@ var (
 		JSConsumerPullRequiresAckErr:               {Code: 400, ErrCode: 10084, Description: "consumer in pull mode requires explicit ack policy on workqueue stream"},
 		JSConsumerPullWithRateLimitErr:             {Code: 400, ErrCode: 10086, Description: "consumer in pull mode can not have rate limit set"},
 		JSConsumerPushMaxWaitingErr:                {Code: 400, ErrCode: 10080, Description: "consumer in push mode can not set max waiting"},
+		JSConsumerPushWithPriorityGroupErr:         {Code: 400, ErrCode: 10178, Description: "priority groups can not be used with push consumers"},
 		JSConsumerReplacementWithDifferentNameErr:  {Code: 400, ErrCode: 10106, Description: "consumer replacement durable config not the same"},
 		JSConsumerReplicasExceedsStream:            {Code: 400, ErrCode: 10126, Description: "consumer config replica count exceeds parent stream"},
 		JSConsumerReplicasShouldMatchStream:        {Code: 400, ErrCode: 10134, Description: "consumer config replicas must match interest retention stream's replicas"},
@@ -650,6 +665,7 @@ var (
 		JSStreamNotFoundErr:                        {Code: 404, ErrCode: 10059, Description: "stream not found"},
 		JSStreamNotMatchErr:                        {Code: 400, ErrCode: 10060, Description: "expected stream does not match"},
 		JSStreamOfflineErr:                         {Code: 500, ErrCode: 10118, Description: "stream is offline"},
+		JSStreamOfflineReasonErrF:                  {Code: 500, ErrCode: 10194, Description: "stream is offline: {err}"},
 		JSStreamPurgeFailedF:                       {Code: 500, ErrCode: 10110, Description: "{err}"},
 		JSStreamReplicasNotSupportedErr:            {Code: 500, ErrCode: 10074, Description: "replicas > 1 not supported in non-clustered mode"},
 		JSStreamReplicasNotUpdatableErr:            {Code: 400, ErrCode: 10061, Description: "Replicas configuration can not be updated"},
@@ -801,6 +817,16 @@ func NewJSClusterRequiredError(opts ...ErrorOption) *ApiError {
 	}
 
 	return ApiErrors[JSClusterRequiredErr]
+}
+
+// NewJSClusterServerMemberChangeInflightError creates a new JSClusterServerMemberChangeInflightErr error: "cluster member change is in progress"
+func NewJSClusterServerMemberChangeInflightError(opts ...ErrorOption) *ApiError {
+	eopts := parseOpts(opts)
+	if ae, ok := eopts.err.(*ApiError); ok {
+		return ae
+	}
+
+	return ApiErrors[JSClusterServerMemberChangeInflightErr]
 }
 
 // NewJSClusterServerNotMemberError creates a new JSClusterServerNotMemberErr error: "server is not a member of the cluster"
@@ -1327,6 +1353,22 @@ func NewJSConsumerOfflineError(opts ...ErrorOption) *ApiError {
 	return ApiErrors[JSConsumerOfflineErr]
 }
 
+// NewJSConsumerOfflineReasonError creates a new JSConsumerOfflineReasonErrF error: "consumer is offline: {err}"
+func NewJSConsumerOfflineReasonError(err error, opts ...ErrorOption) *ApiError {
+	eopts := parseOpts(opts)
+	if ae, ok := eopts.err.(*ApiError); ok {
+		return ae
+	}
+
+	e := ApiErrors[JSConsumerOfflineReasonErrF]
+	args := e.toReplacerArgs([]interface{}{"{err}", err})
+	return &ApiError{
+		Code:        e.Code,
+		ErrCode:     e.ErrCode,
+		Description: strings.NewReplacer(args...).Replace(e.Description),
+	}
+}
+
 // NewJSConsumerOnMappedError creates a new JSConsumerOnMappedErr error: "consumer direct on a mapped consumer"
 func NewJSConsumerOnMappedError(opts ...ErrorOption) *ApiError {
 	eopts := parseOpts(opts)
@@ -1395,6 +1437,16 @@ func NewJSConsumerPushMaxWaitingError(opts ...ErrorOption) *ApiError {
 	}
 
 	return ApiErrors[JSConsumerPushMaxWaitingErr]
+}
+
+// NewJSConsumerPushWithPriorityGroupError creates a new JSConsumerPushWithPriorityGroupErr error: "priority groups can not be used with push consumers"
+func NewJSConsumerPushWithPriorityGroupError(opts ...ErrorOption) *ApiError {
+	eopts := parseOpts(opts)
+	if ae, ok := eopts.err.(*ApiError); ok {
+		return ae
+	}
+
+	return ApiErrors[JSConsumerPushWithPriorityGroupErr]
 }
 
 // NewJSConsumerReplacementWithDifferentNameError creates a new JSConsumerReplacementWithDifferentNameErr error: "consumer replacement durable config not the same"
@@ -2333,6 +2385,22 @@ func NewJSStreamOfflineError(opts ...ErrorOption) *ApiError {
 	}
 
 	return ApiErrors[JSStreamOfflineErr]
+}
+
+// NewJSStreamOfflineReasonError creates a new JSStreamOfflineReasonErrF error: "stream is offline: {err}"
+func NewJSStreamOfflineReasonError(err error, opts ...ErrorOption) *ApiError {
+	eopts := parseOpts(opts)
+	if ae, ok := eopts.err.(*ApiError); ok {
+		return ae
+	}
+
+	e := ApiErrors[JSStreamOfflineReasonErrF]
+	args := e.toReplacerArgs([]interface{}{"{err}", err})
+	return &ApiError{
+		Code:        e.Code,
+		ErrCode:     e.ErrCode,
+		Description: strings.NewReplacer(args...).Replace(e.Description),
+	}
 }
 
 // NewJSStreamPurgeFailedError creates a new JSStreamPurgeFailedF error: "{err}"
