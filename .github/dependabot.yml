@@ -9,10 +9,16 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      go-dependencies:
+        patterns: [ "*" ]
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: daily
+    groups:
+      frontend-dependencies:
+        patterns: [ "*" ]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
