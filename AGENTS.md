@@ -30,6 +30,38 @@ When starting a task, please:
 2.  **Read the relevant instruction file** listed above to establish context.
 3.  **Refer to `general-instructions.md`** for cross-cutting concerns and project-wide conventions.
 
+## ✨ Feature Notes
+
+### User Roles
+
+User roles let operators define reusable, scoped publish/subscribe permission
+sets per account and assign them to NATS users. Implementation details:
+
+- A role is stored as a record in the `nats_auth_signing_keys` collection,
+  scoped to an account (fields: `role`, `account`, `publish`, `subscribe`,
+  plus the generated nkey `public_key`/`private_key`/`seed`). Role names are
+  unique per account (unique index on `role, account`).
+- On create, the backend (`natsauth/nats.go`) generates an account-scoped
+  signing key (`generateSigningKeyRecord`) and adds a scoped signer to the
+  account JWT via `syncSigningKeyScopeToAccount`
+  (`natsauth/signing_keys.go`). The role's `publish`/`subscribe` subjects
+  become the `UserScope` permission template
+  (`buildUserScopeFromSigningKeyRecord`).
+- A NATS user (`nats_auth_users`) optionally references a role through its
+  `signing_key` field. When set, the user JWT is signed with the role's
+  signing key seed and marked `SetScoped(true)`
+  (`generateUserRecordWithPermissions` in `natsauth/generators.go`), so the
+  user inherits permissions from the account's scoped signing key. Without a
+  role, the user is signed by the account's main signing key with full
+  permissions.
+- Because scoped users derive permissions from the account JWT, editing a role
+  re-syncs the account JWT and updates all assigned users automatically — no
+  need to regenerate user credentials.
+- Frontend: roles are managed under
+  `frontend/src/pages/_app/.../accounts_/$accountId/roles/index.lazy.tsx`;
+  role assignment happens in the users page and is rendered by
+  `frontend/src/components/ui/users/user-columns.tsx`.
+
 ## 🛠️ Technology Stack Summary
 
 -   **Backend:** Go 1.24+ with Pocketbase v0.28.1

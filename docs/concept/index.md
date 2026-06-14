@@ -15,6 +15,7 @@
 - **Multi-tenant**: NATS Tower allows you to manage multiple NATS installations and accounts from a single interface.
 - **User management**: NATS Tower provides an interface for managing users and their teams.
 - **Permission management**: NATS Tower allows you to manage permissions for users and teams.
+- **User roles**: NATS Tower lets you define reusable, scoped publish/subscribe permission sets (roles) per account and assign them to users. See [User Roles](../user_roles/index.md).
 - **Decentralized JWT authentication**: NATS Tower enables teams to manage their own users within the limits of their accounts.
 - **Resource management**: NATS Tower allows you to manage the resources that are available to each account.
 - **Web-based UI**: NATS Tower provides a user-friendly web interface for managing NATS installations and accounts.
