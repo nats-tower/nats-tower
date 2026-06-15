@@ -1,0 +1,7 @@
+node_modules/
+.runtime/
+screenshots/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
