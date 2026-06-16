@@ -56,6 +56,8 @@ type ClientAuthentication interface {
 	GetNonce() []byte
 	// Kind indicates what type of connection this is matching defined constants like CLIENT, ROUTER, GATEWAY, LEAF etc
 	Kind() int
+	//Gets the ID associated with a client
+	GetID() uint64
 }
 
 // NkeyUser is for multiple nkey based users
@@ -1283,7 +1285,7 @@ func checkClientTLSCertSubject(c *client, fn tlsMapAuthFn) bool {
 	hasEmailAddresses := len(cert.EmailAddresses) > 0
 	hasSubject := len(cert.Subject.String()) > 0
 	hasURIs := len(cert.URIs) > 0
-	if !hasEmailAddresses && !hasSubject && !hasURIs {
+	if !hasSANs && !hasEmailAddresses && !hasSubject && !hasURIs {
 		c.Debugf("User required in cert, none found")
 		return false
 	}
