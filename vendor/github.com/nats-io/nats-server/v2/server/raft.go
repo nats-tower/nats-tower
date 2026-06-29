@@ -22,7 +22,6 @@ import (
 	"iter"
 	"math"
 	"math/rand"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -86,6 +85,7 @@ type RaftNode interface {
 	WaitForStop()
 	Delete()
 	IsDeleted() bool
+	Reset()
 	RecreateInternalSubs() error
 	IsSystemAccount() bool
 	GetTrafficAccountName() string
@@ -344,6 +344,7 @@ var (
 	errNoInternalClient  = errors.New("raft: no internal client")
 	errMembershipChange  = errors.New("raft: membership change in progress")
 	errRemoveLastNode    = errors.New("raft: cannot remove the last peer")
+	errPeerNotFound      = errors.New("raft: peer not found")
 )
 
 // This will bootstrap a raftNode by writing its config into the store directory.
@@ -374,16 +375,13 @@ func (s *Server) bootstrapRaftNode(cfg *RaftConfig, knownPeers []string, allPeer
 			if gw.Name == cn {
 				continue
 			}
-			for _, u := range gw.URLs {
-				host := u.Hostname()
-				// If this is an IP just add one.
-				if net.ParseIP(host) != nil {
-					ngwps++
-				} else {
-					addrs, _ := net.LookupHost(host)
-					ngwps += len(addrs)
-				}
-			}
+			// Each configured gateway URL represents one remote endpoint, so
+			// count it as a single peer. We must not resolve the host and add
+			// one per returned address: a hostname on a dual-stack host (e.g.
+			// "localhost" -> 127.0.0.1 + ::1) would then count the same server
+			// multiple times, inflating the expected meta-group size above the
+			// real node count and preventing meta leader election.
+			ngwps += len(gw.URLs)
 		}
 
 		if expected < nrs+ngwps {
@@ -1046,7 +1044,10 @@ func (n *raft) ProposeRemovePeer(peer string) error {
 		n.RUnlock()
 		return errMembershipChange
 	}
-
+	if _, ok := n.peers[peer]; !ok {
+		n.RUnlock()
+		return errPeerNotFound
+	}
 	if len(n.peers) <= 1 {
 		n.RUnlock()
 		return errRemoveLastNode
@@ -1383,6 +1384,11 @@ func (n *raft) installSnapshot(snap *snapshot) error {
 		return err
 	}
 
+	// If installing a snapshot past our commits, clear the cache.
+	if snap.lastIndex > n.commit && len(n.pae) > 0 {
+		n.pae = make(map[uint64]*appendEntry)
+	}
+
 	var state StreamState
 	n.wal.FastState(&state)
 	n.papplied = snap.lastIndex
@@ -1543,12 +1549,20 @@ func (c *checkpoint) InstallSnapshot(data []byte) (uint64, error) {
 	n.Unlock()
 	err := writeFileWithSync(c.snapFile, encoded, defaultFilePerms)
 	n.Lock()
+	// On either failure path, drop the file we just wrote so it doesn't get
+	// picked up by setupLastSnapshot on restart. Skip the remove if it's the
+	// snapshot already adopted into n.snapfile for this term/applied.
 	if err != nil {
+		if c.snapFile != n.snapfile {
+			os.Remove(c.snapFile)
+		}
 		// We could set write err here, but if this is a temporary situation, too many open files etc.
 		// we want to retry and snapshots are not fatal.
 		return 0, err
 	} else if !n.snapshotting {
-		// The checkpoint can be aborted at any time, don't continue if that happened.
+		if c.snapFile != n.snapfile {
+			os.Remove(c.snapFile)
+		}
 		return 0, errSnapAborted
 	}
 
@@ -1608,6 +1622,9 @@ func termAndIndexFromSnapFile(sn string) (term, index uint64, err error) {
 	}
 	fn := filepath.Base(sn)
 	if n, err := fmt.Sscanf(fn, snapFileT, &term, &index); err != nil || n != 2 {
+		return 0, 0, errBadSnapName
+	}
+	if fn != fmt.Sprintf(snapFileT, term, index) {
 		return 0, 0, errBadSnapName
 	}
 	return term, index, nil
@@ -2218,6 +2235,64 @@ func (n *raft) shutdown() {
 		n.leaderSince.Store(nil)
 		close(n.quit)
 	}
+}
+
+// Reset discards this node's local raft state (log, snapshots, peer set,
+// term/vote) so it can be caught up cleanly by another group with the same
+// name. The caller is responsible for parking the node first (typically via
+// SetObserver) if it should not compete for leadership immediately after;
+// Reset itself steps the node down but does not flip observer mode.
+func (n *raft) Reset() {
+	n.Lock()
+	defer n.Unlock()
+
+	n.debug("Resetting Raft state")
+
+	n.stepdownLocked(_EMPTY_)
+
+	// Cancel any in-flight catchup so it does not race the reset.
+	n.cancelCatchup()
+
+	// Drop proposals and inbound entries; they are no longer meaningful
+	// against whatever log this node ends up following.
+	n.prop.drain()
+	n.entry.drain()
+	n.resp.drain()
+	n.apply.drain()
+	n.reqs.drain()
+	n.votes.drain()
+
+	// Remove every snapshot under our snapshots dir, not just the one referenced
+	// by n.snapfile. Orphans (e.g. from a crash between install and the previous
+	// file's removal) would otherwise be picked up by setupLastSnapshot on the
+	// next restart and reseed the state we are discarding here.
+	snapDir := filepath.Join(n.sd, snapshotsDir)
+	if err := os.RemoveAll(snapDir); err != nil {
+		n.warn("Error removing snapshots directory during reset: %v", err)
+	}
+	if err := os.MkdirAll(snapDir, defaultDirPerms); err != nil {
+		n.warn("Error recreating snapshots directory during reset: %v", err)
+	}
+	n.snapfile = _EMPTY_
+
+	// Abort any inflight async snapshot checkpoint.
+	n.snapshotting = false
+
+	// Reset the WAL, but reset these first to not trip the assertion.
+	n.commit, n.hcommit, n.applied, n.processed, n.papplied = 0, 0, 0, 0, 0
+	n.resetWAL()
+
+	// Reset peer set to just ourselves; a new leader will fold us back into
+	// the cluster's membership view via processPeerState.
+	n.peers = map[string]*lps{n.id: {time.Time{}, 0, true}}
+	n.removed = nil
+	n.adjustClusterSizeAndQuorum()
+
+	n.term, n.vote = 0, _EMPTY_
+	n.writeTermVote()
+
+	// Persist the cleared peer state so a restart picks up the reset.
+	n.writePeerState(n.currentPeerStateLocked())
 }
 
 const (
@@ -2904,6 +2979,16 @@ func (n *raft) handleForwardedRemovePeerProposal(sub *subscription, c *client, _
 		n.RUnlock()
 		return
 	}
+	if _, ok := n.peers[string(msg)]; !ok {
+		n.debug("Ignoring forwarded peer removal proposal, peer not found")
+		n.RUnlock()
+		return
+	}
+	if len(n.peers) <= 1 {
+		n.debug("Ignoring forwarded peer removal proposal, remove last node")
+		n.RUnlock()
+		return
+	}
 	prop := n.prop
 	n.RUnlock()
 
@@ -2966,6 +3051,9 @@ func (n *raft) addPeer(peer string) {
 	// If we were on the removed list reverse that here.
 	if n.removed != nil {
 		delete(n.removed, peer)
+		if len(n.removed) == 0 {
+			n.removed = nil
+		}
 	}
 
 	if lp, ok := n.peers[peer]; !ok {
@@ -3901,6 +3989,19 @@ func (n *raft) truncateWAL(term, index uint64) {
 	// Set after we know we have truncated properly.
 	n.pterm, n.pindex = term, index
 
+	// Invalidate cached entries the WAL no longer has.
+	if index == 0 {
+		if len(n.pae) > 0 {
+			n.pae = make(map[uint64]*appendEntry)
+		}
+	} else {
+		for k := range n.pae {
+			if k > index {
+				delete(n.pae, k)
+			}
+		}
+	}
+
 	// Check if we're truncating an uncommitted membership change.
 	if n.membChangeIndex > 0 && n.membChangeIndex > index {
 		n.membChangeIndex = 0
@@ -4255,13 +4356,10 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 
 			// Inherit state from appendEntry with the leader's snapshot.
 			hadPreviousSnapshot := n.snapfile != _EMPTY_
-			n.pindex = ae.pindex
-			n.pterm = ae.pterm
-			n.commit = ae.pindex
 
 			snap := &snapshot{
-				lastTerm:  n.pterm,
-				lastIndex: n.pindex,
+				lastTerm:  ae.pterm,
+				lastIndex: ae.pindex,
 				peerstate: encodePeerState(&peerState{n.peerNames(), n.csz, n.extSt}),
 				data:      ae.entries[0].Data,
 			}
@@ -4271,6 +4369,9 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 				n.Unlock()
 				return
 			}
+			n.pindex = ae.pindex
+			n.pterm = ae.pterm
+			n.commit = ae.pindex
 			n.resetInitializing()
 
 			if !hadPreviousSnapshot {
@@ -4422,8 +4523,27 @@ func (n *raft) processPeerState(ps *peerState) {
 		if lp := old[peer]; lp != nil {
 			lp.kp = true
 			n.peers[peer] = lp
+			delete(old, peer)
 		} else {
 			n.peers[peer] = &lps{time.Time{}, 0, true}
+		}
+		// If we were on the removed list reverse that here.
+		if n.removed != nil {
+			delete(n.removed, peer)
+			if len(n.removed) == 0 {
+				n.removed = nil
+			}
+		}
+	}
+	// Any remaining old nodes are marked as removed, so they can't be
+	// re-added via automatic peer tracking.
+	if len(old) > 0 {
+		if n.removed == nil {
+			n.removed = map[string]time.Time{}
+		}
+		now := time.Now()
+		for peer := range old {
+			n.removed[peer] = now
 		}
 	}
 	n.debug("Update peers from leader to %+v", n.peers)
