@@ -68,6 +68,20 @@ export function getUsersColumns(
 			cell: ({ row }) => {
 				const user = row.original;
 
+				const contextName = `${accountData?.name}-${user.name}`.replace(
+					/[^a-zA-Z0-9._-]/g,
+					"-",
+				);
+				const credsPath = `~/.config/nats/creds/${contextName}.creds`;
+				const setupContextCommand = user?.creds
+					? [
+							`umask 077 && mkdir -p ~/.config/nats/creds && cat > ${credsPath} <<'NATS_CREDS_EOF'`,
+							user.creds.trim(),
+							"NATS_CREDS_EOF",
+							`nats context save "${contextName}" --server "${installationData?.url}" --creds ${credsPath} --select`,
+						].join("\n")
+					: undefined;
+
 				return (
 					<div className="text-right">
 						<Dialog>
@@ -84,6 +98,11 @@ export function getUsersColumns(
 										{accountData?.name}'
 									</DialogDescription>
 								</DialogHeader>
+								<CredentialBox
+									title="Create NATS CLI context (macOS & Linux)"
+									value={setupContextCommand}
+									description="Copy & paste this one-liner into your terminal. It stores the credentials and creates a selected NATS CLI context, so you can immediately run commands like 'nats stream ls'."
+								/>
 								<CredentialBox
 									title="CLI Command"
 									value={`nats --server ${installationData?.url} --creds nats.creds stream ls`}
