@@ -58,24 +58,31 @@ const updateProfileFromOAuth2 = async (
 
 const UserLoginForm = () => {
 	const navigate = useNavigate();
+	const [loginError, setLoginError] = useState<string | null>(null);
 
 	return (
 		<form
 			onSubmit={async (event) => {
 				event.preventDefault();
+				setLoginError(null);
 				const form = event.target as HTMLFormElement;
 				const email = form.email.value;
 				const password = form.password.value;
 				const isAdmin = form["admin-auth"][1].checked;
-				console.log(form["admin-auth"]);
 
-				if (isAdmin) {
-					await pb.collection("_superusers").authWithPassword(email, password);
-				} else {
-					await pb.collection("users").authWithPassword(email, password);
+				try {
+					if (isAdmin) {
+						await pb.collection("_superusers").authWithPassword(email, password);
+					} else {
+						await pb.collection("users").authWithPassword(email, password);
+					}
+
+					navigate({ to: getRedirectAfterSignIn() });
+				} catch {
+					setLoginError(
+						"Sign in failed. Please check your credentials and try again.",
+					);
 				}
-
-				navigate({ to: getRedirectAfterSignIn() });
 			}}
 			className="flex flex-col gap-4"
 		>
@@ -104,6 +111,12 @@ const UserLoginForm = () => {
 					Admin
 				</label>
 			</div>
+
+			{loginError ? (
+				<div role="alert" className="text-sm font-medium text-destructive">
+					{loginError}
+				</div>
+			) : undefined}
 
 			<Button type="submit" className="w-full">
 				Sign in
