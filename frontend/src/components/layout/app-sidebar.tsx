@@ -5,12 +5,14 @@ import {
 	FoldVertical,
 	KeyRound,
 	LayoutDashboard,
+	ServerCog,
 	type LucideIcon,
 } from "lucide-react";
 
 import { NavMain } from "@/components/layout/nav-main";
 import { NavUser } from "@/components/layout/nav-user";
 import { InstallationSwitcher } from "@/components/layout/installation-switcher";
+import { pb } from "@/lib/pocketbase";
 import {
 	Sidebar,
 	SidebarContent,
@@ -65,6 +67,7 @@ export function getNavInfo(resolvedHref: string | undefined) {
 			title: string;
 			url: string;
 			icon: LucideIcon;
+			adminOnly?: boolean;
 			breadcrumb: { name: string; url: string } | undefined;
 			isActive: boolean;
 			subPaths: {
@@ -152,6 +155,18 @@ export function getNavInfo(resolvedHref: string | undefined) {
 				isActive: false,
 				subPaths: [],
 			},
+			{
+				title: "Cluster State",
+				url: "/installations/$installationId/cluster-state",
+				icon: ServerCog,
+				adminOnly: true,
+				breadcrumb: {
+					name: "Cluster State",
+					url: "/installations/$installationId/cluster-state",
+				},
+				isActive: false,
+				subPaths: [],
+			},
 		],
 	};
 
@@ -234,13 +249,18 @@ function compareHrefs(href: string | undefined, resolvedHref: string) {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const { resolvedLocation } = useRouterState();
 
+	const isAdmin = pb.authStore.isSuperuser;
+	const items = getNavInfo(resolvedLocation?.href).items.filter(
+		(item) => !item.adminOnly || isAdmin,
+	);
+
 	return (
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader>
 				<InstallationSwitcher />
 			</SidebarHeader>
 			<SidebarContent>
-				<NavMain items={getNavInfo(resolvedLocation?.href).items} />
+				<NavMain items={items} />
 			</SidebarContent>
 			<SidebarFooter>
 				<NavUser />
