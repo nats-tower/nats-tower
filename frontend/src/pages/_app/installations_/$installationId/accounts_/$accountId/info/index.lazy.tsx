@@ -4,6 +4,7 @@ import {
 	Bar,
 	BarChart,
 	Cell,
+	Legend,
 	Pie,
 	PieChart,
 	ResponsiveContainer,
@@ -346,7 +347,7 @@ function AccountInfo() {
 							</CardHeader>
 							<CardContent>
 								{storageDistribution.length > 0 ? (
-									<ResponsiveContainer width="100%" height={280}>
+									<ResponsiveContainer width="100%" height={340}>
 										<PieChart>
 											<Tooltip
 												formatter={(value) => [
@@ -358,8 +359,8 @@ function AccountInfo() {
 												data={storageDistribution}
 												dataKey="value"
 												nameKey="name"
-												innerRadius={55}
-												outerRadius={95}
+												innerRadius={50}
+												outerRadius={85}
 												paddingAngle={2}
 											>
 												{storageDistribution.map((entry, index) => (
@@ -369,10 +370,29 @@ function AccountInfo() {
 													/>
 												))}
 											</Pie>
+											<Legend
+												verticalAlign="bottom"
+												align="center"
+												iconType="circle"
+												iconSize={9}
+												formatter={(value) => {
+													const entry = storageDistribution.find(
+														(item) => item.name === value,
+													);
+													return (
+														<span className="text-xs text-muted-foreground">
+															{value}
+															{entry
+																? ` — ${formatBytes(entry.value)}`
+																: ""}
+														</span>
+													);
+												}}
+											/>
 										</PieChart>
 									</ResponsiveContainer>
 								) : (
-									<div className="flex h-[280px] items-center justify-center text-sm italic text-muted-foreground">
+									<div className="flex h-[340px] items-center justify-center text-sm italic text-muted-foreground">
 										No stored data yet.
 									</div>
 								)}
