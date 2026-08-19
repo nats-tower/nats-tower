@@ -35,10 +35,12 @@ interface ServerInfo {
 	statsz: ServerStats;
 }
 
+// statsz.cpu is a percentage where 100% equals one fully used core, so divide
+// by 100 to convert it into a number of cores.
 function calculateTotalUsedCores(serverInfos: ServerInfo[]): number {
 	let total = 0;
 	for (const server of serverInfos) {
-		total += server.statsz.cpu;
+		total += server.statsz.cpu / 100;
 	}
 	return total;
 }
@@ -282,7 +284,7 @@ export function ClusterInfo({ installationId }: ClusterInfoProps) {
 											Used Cores
 										</dt>
 										<dd className="font-medium tabular-nums">
-											{`${server.statsz.cpu.toFixed(2)} / ${server.statsz.cores}`}
+											{`${(server.statsz.cpu / 100).toFixed(2)} / ${server.statsz.cores}`}
 										</dd>
 									</div>
 									<div className="flex items-center justify-between gap-2">
