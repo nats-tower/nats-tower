@@ -119,6 +119,12 @@ func RegisterAPIRoutes(ctx context.Context,
 			return e.JSON(http.StatusOK, clusterInfo)
 		}).BindFunc(metricsMiddleware.WrapHandler("/api/nats-tower/installations/:installation_id/cluster_info"))
 
+	installationGroup.GET("/cluster_state",
+		func(e *core.RequestEvent) error {
+			installationID := e.Request.PathValue("installation_id")
+			return GetClusterState(e, installationID)
+		}).BindFunc(metricsMiddleware.WrapHandler("/api/nats-tower/installations/:installation_id/cluster_state"))
+
 	accountGroup := installationGroup.Group("/accounts/{account_id}")
 	accountGroup.BindFunc(func(e *core.RequestEvent) error {
 		requestInfo, err := e.RequestInfo()
