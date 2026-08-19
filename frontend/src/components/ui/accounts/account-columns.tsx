@@ -13,8 +13,6 @@ import {
 } from "@radix-ui/react-icons";
 import type { ExpandedNatsAuthOperatorsResponse } from "@/lib/expanded-pocketbase-types";
 import { Button } from "../button";
-import { Sheet, SheetTrigger, SheetContent } from "../sheet";
-import { AccountInfoSheet } from "../account-info-sheet";
 import { MultiSelect } from "../multi-select-dialog";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../tooltip";
 import { Popover, PopoverTrigger, PopoverContent } from "../popover";
@@ -139,24 +137,17 @@ export function getAccountsColumns(
 
 				return (
 					<div className="flex items-center justify-end">
-						<Sheet>
-							<SheetTrigger
-								asChild
-								onClick={(e) => {
-									e.stopPropagation();
-								}}
-							>
-								<Button variant="outline">
-									<InfoCircledIcon className="mr-1" /> Info
-								</Button>
-							</SheetTrigger>
-							<SheetContent className="sm:max-w-5xl">
-								<AccountInfoSheet
-									installationId={installationId}
-									accountId={account.id}
-								/>
-							</SheetContent>
-						</Sheet>
+						<Button
+							variant="outline"
+							onClick={(e) => {
+								e.stopPropagation();
+								navigate({
+									to: `/installations/${installationId}/accounts/${account.id}/info`,
+								});
+							}}
+						>
+							<InfoCircledIcon className="mr-1" /> Info
+						</Button>
 
 						{pb.authStore.isSuperuser && account.name !== "SYS" ? (
 							<MultiSelect

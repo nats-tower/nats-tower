@@ -21,6 +21,7 @@ interface Crumb {
 }
 
 const ACCOUNT_SUBPAGE_LABELS: Record<string, string> = {
+	info: "Info",
 	users: "Users",
 	roles: "Roles",
 	"k8s-access": "Kubernetes Access",

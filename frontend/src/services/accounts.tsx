@@ -91,3 +91,72 @@ export function useAccountByIdWithTeams(
 		},
 	);
 }
+
+export function useAccountByIdWithLimits(
+	installationId: string,
+	accountId: string,
+) {
+	return useSWR(
+		[
+			`/installations/${installationId}/accounts/${accountId}?expand=limits`,
+			installationId,
+			accountId,
+		],
+		async ([_, pInstallationId, pAccountId]) => {
+			if (!pInstallationId || !pAccountId) {
+				return;
+			}
+			return pb
+				.collection<ExpandedNatsAuthAccountsResponse>("nats_auth_accounts")
+				.getOne(pAccountId, {
+					expand: "limits",
+				});
+		},
+	);
+}
+
+export function useAccountStreams(installationId: string, accountId: string) {
+	return useSWR(
+		[
+			`/installations/${installationId}/accounts/${accountId}/streams`,
+			installationId,
+			accountId,
+		],
+		async ([_, pInstallationId, pAccountId]) => {
+			if (!pInstallationId || !pAccountId) {
+				return;
+			}
+			return pb.send<StreamList>(
+				`/api/nats-tower/installations/${pInstallationId}/accounts/${pAccountId}/streams`,
+				{
+					method: "GET",
+				},
+			);
+		},
+	);
+}
+
+export interface StreamList {
+	streams: Stream[];
+}
+
+export interface Stream {
+	name: string;
+	created: string;
+	cluster?: StreamCluster;
+	state: StreamState;
+}
+
+export interface StreamCluster {
+	leader: string;
+}
+
+export interface StreamState {
+	messages: number;
+	bytes: number;
+	first_seq: number;
+	first_ts: string;
+	last_seq: number;
+	last_ts: string;
+	consumer_count: number;
+}
