@@ -350,10 +350,22 @@ function AccountInfo() {
 									<ResponsiveContainer width="100%" height={340}>
 										<PieChart>
 											<Tooltip
-												formatter={(value) => [
-													formatBytes(value as number),
-													"Size",
-												]}
+												content={({ active, payload }) => {
+													const entry = payload?.[0]?.payload as
+														| { name: string; value: number }
+														| undefined;
+													if (!active || !entry) {
+														return null;
+													}
+													return (
+														<div className="rounded-md border bg-background px-3 py-2 text-sm shadow-md">
+															<div className="font-medium">{entry.name}</div>
+															<div className="text-muted-foreground">
+																Size: {formatBytes(entry.value)}
+															</div>
+														</div>
+													);
+												}}
 											/>
 											<Pie
 												data={storageDistribution}
