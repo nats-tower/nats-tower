@@ -108,6 +108,13 @@ export function getNavInfo(resolvedHref: string | undefined) {
 				isActive: false,
 				subPaths: [
 					{
+						path: "/installations/$installationId/accounts/$accountId/info",
+						breadcrumb: {
+							name: "Info",
+							url: "/installations/$installationId/accounts/$accountId/info",
+						},
+					},
+					{
 						path: "/installations/$installationId/accounts/$accountId/users",
 						breadcrumb: {
 							name: "Users",
