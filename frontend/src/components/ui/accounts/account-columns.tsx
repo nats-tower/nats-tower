@@ -130,6 +130,42 @@ export function getAccountsColumns(
 			accessorKey: "description",
 		},
 		{
+			id: "teams",
+			header: "Teams",
+			cell: ({ row }) => {
+				const account = row.original;
+
+				if (!pb.authStore.isSuperuser || account.name === "SYS") {
+					return null;
+				}
+
+				return (
+					<MultiSelect
+						options={availableTeams().map((team) => {
+							return {
+								label: team.name,
+								value: team.id,
+							};
+						})}
+						onValueChange={(value) => {
+							pb.collection<NatsAuthAccountsRecord>(
+								"nats_auth_accounts",
+							).update(account.id, {
+								teams: value,
+							});
+							mutateAccounts();
+							toast("Teams updated successfully.");
+						}}
+						defaultValue={account.teams ?? []}
+						placeholder="Select teams with access"
+						variant="inverted"
+						maxCount={0}
+						className="w-[300px]"
+					/>
+				);
+			},
+		},
+		{
 			id: "actions",
 			header: () => <div className="text-right">Actions</div>,
 			cell: ({ row }) => {
@@ -148,31 +184,6 @@ export function getAccountsColumns(
 						>
 							<InfoCircledIcon className="mr-1" /> Info
 						</Button>
-
-						{pb.authStore.isSuperuser && account.name !== "SYS" ? (
-							<MultiSelect
-								options={availableTeams().map((team) => {
-									return {
-										label: team.name,
-										value: team.id,
-									};
-								})}
-								onValueChange={(value) => {
-									pb.collection<NatsAuthAccountsRecord>(
-										"nats_auth_accounts",
-									).update(account.id, {
-										teams: value,
-									});
-									mutateAccounts();
-									toast("Teams updated successfully.");
-								}}
-								defaultValue={account.teams ?? []}
-								placeholder="Select teams with access"
-								variant="inverted"
-								maxCount={0}
-								className="w-[300px] ml-2"
-							/>
-						) : undefined}
 
 						<Button
 							variant="outline"
