@@ -74,5 +74,6 @@ Navigate to your newly created NATS installation and click on the `Key` button n
 ## Planned features
 
 - Graph visualization of Import / Export relationships
-- User ACL management
+- Ad-hoc per-user ACLs not tied to a named role (scoped publish/subscribe
+  ACLs are already available via [user roles](./user_roles/index.md))
 

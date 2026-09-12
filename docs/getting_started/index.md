@@ -15,7 +15,7 @@ Download the latest version of NATS Tower and run the following command to start
 ### Docker
 
 ```bash
-docker run -p 8099:8099 ghcr.io/nats-tower/nats-tower:v0.1.0 serve --http 0.0.0.0:8099
+docker run -p 8099:8099 ghcr.io/nats-tower/nats-tower:main serve --http 0.0.0.0:8099
 ```
 
 Next, open your browser and navigate to [http://localhost:8099](http://localhost:8099) to access the NATS Tower interface.
