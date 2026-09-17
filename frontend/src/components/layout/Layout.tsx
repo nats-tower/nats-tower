@@ -24,6 +24,7 @@ const ACCOUNT_SUBPAGE_LABELS: Record<string, string> = {
 	info: "Info",
 	users: "Users",
 	roles: "Roles",
+	"api-tokens": "API Tokens",
 	"k8s-access": "Kubernetes Access",
 	exports: "Exports",
 	imports: "Imports",

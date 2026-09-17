@@ -129,6 +129,13 @@ export function getNavInfo(resolvedHref: string | undefined) {
 						},
 					},
 					{
+						path: "/installations/$installationId/accounts/$accountId/api-tokens",
+						breadcrumb: {
+							name: "API Tokens",
+							url: "/installations/$installationId/accounts/$accountId/api-tokens",
+						},
+					},
+					{
 						path: "/installations/$installationId/accounts/$accountId/k8s-access",
 						breadcrumb: {
 							name: "Kubernetes Access",

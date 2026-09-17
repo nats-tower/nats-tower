@@ -89,12 +89,23 @@ func (m *NATSAuthModule) initNATSAuthCollections(app core.App) error {
 	if err != nil {
 		return err
 	}
+
+	// create api tokens collection
+	apiTokensCollection, err := initNATSAuthAPITokensCollection(m.ctx,
+		app,
+		m.logger,
+		accountCollection)
+	if err != nil {
+		return err
+	}
+
 	m.NATSOperatorCollection = operatorCollection
 	m.NATSAccountCollection = accountCollection
 	m.NATSAccountPendingCollection = pendingCollection
 	m.NATSUserCollection = userCollection
 	m.NATSLimitsCollection = limitCollection
 	m.NATSSigningKeysCollection = signingKeysCollection
+	m.NATSAPITokensCollection = apiTokensCollection
 
 	return nil
 }
@@ -612,6 +623,69 @@ func initNATSAuthLimitsCollection(_ context.Context,
 	addOrUpdateField(collection, &core.BoolField{
 		Name:     "default",
 		Required: false,
+	})
+
+	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)
+	if err := app.Save(collection); err != nil {
+		return nil, err
+	}
+	return collection, nil
+}
+
+func initNATSAuthAPITokensCollection(_ context.Context,
+	app core.App,
+	_ *slog.Logger,
+	accountCollection *core.Collection) (*core.Collection, error) {
+
+	collection, err := app.FindCollectionByNameOrId(APITokensCollectionName)
+
+	if err == sql.ErrNoRows {
+		collection = core.NewBaseCollection(APITokensCollectionName)
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// API tokens are only manageable by superusers (admins).
+	adminRule := "@request.auth.collectionName = '" + core.CollectionNameSuperusers + "'"
+
+	collection.ListRule = types.Pointer(adminRule)
+	collection.ViewRule = types.Pointer(adminRule)
+	collection.CreateRule = types.Pointer(adminRule)
+	collection.UpdateRule = types.Pointer(adminRule)
+	collection.DeleteRule = types.Pointer(adminRule)
+	collection.Indexes = types.JSONArray[string]{
+		"create unique index nats_api_tokens_unique_name_account on keys (name,account)",
+		"create unique index nats_api_tokens_unique_token on keys (token)",
+	}
+
+	addOrUpdateField(collection, &core.TextField{
+		Name:        "name",
+		Required:    true,
+		Presentable: true,
+	})
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "description",
+		Required: false,
+	})
+	addOrUpdateField(collection, &core.RelationField{
+		Name:          "account",
+		Required:      true,
+		CollectionId:  accountCollection.Id,
+		MaxSelect:     1,
+		CascadeDelete: true,
+	})
+	addOrUpdateField(collection, &core.TextField{
+		Name:     "token",
+		Required: false,
+	})
+	addOrUpdateField(collection, &core.DateField{
+		Name:     "expires_at",
+		Required: false,
+	})
+	addOrUpdateField(collection, &core.AutodateField{
+		Name:     "created",
+		OnCreate: true,
 	})
 
 	// validate and submit (internally it calls app.SaveCollection(collection) in a transaction)

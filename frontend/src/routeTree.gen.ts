@@ -49,6 +49,10 @@ const AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRouteImport
   createFileRoute(
     '/_app/installations_/$installationId/accounts_/$accountId/exports/',
   )()
+const AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRouteImport =
+  createFileRoute(
+    '/_app/installations_/$installationId/accounts_/$accountId/api-tokens/',
+  )()
 
 const SigninLazyRoute = SigninLazyRouteImport.update({
   id: '/signin',
@@ -180,6 +184,18 @@ const AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute =
       (d) => d.Route,
     ),
   )
+const AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute =
+  AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRouteImport.update(
+    {
+      id: '/installations_/$installationId/accounts_/$accountId/api-tokens/',
+      path: '/installations/$installationId/accounts/$accountId/api-tokens/',
+      getParentRoute: () => AppRoute,
+    } as any,
+  ).lazy(() =>
+    import('./pages/_app/installations_/$installationId/accounts_/$accountId/api-tokens/index.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexLazyRoute
@@ -189,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/installations/$installationId/accounts/': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/installations/$installationId/cluster-state/': typeof AppInstallationsInstallationIdClusterStateIndexLazyRoute
   '/installations/$installationId/limits/': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/api-tokens/': typeof AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/exports/': typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/imports/': typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/info/': typeof AppInstallationsInstallationIdAccountsAccountIdInfoIndexLazyRoute
@@ -204,6 +221,7 @@ export interface FileRoutesByTo {
   '/installations/$installationId/accounts': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/installations/$installationId/cluster-state': typeof AppInstallationsInstallationIdClusterStateIndexLazyRoute
   '/installations/$installationId/limits': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/installations/$installationId/accounts/$accountId/api-tokens': typeof AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/exports': typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/imports': typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   '/installations/$installationId/accounts/$accountId/info': typeof AppInstallationsInstallationIdAccountsAccountIdInfoIndexLazyRoute
@@ -221,6 +239,7 @@ export interface FileRoutesById {
   '/_app/installations_/$installationId/accounts/': typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   '/_app/installations_/$installationId/cluster-state/': typeof AppInstallationsInstallationIdClusterStateIndexLazyRoute
   '/_app/installations_/$installationId/limits/': typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  '/_app/installations_/$installationId/accounts_/$accountId/api-tokens/': typeof AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute
   '/_app/installations_/$installationId/accounts_/$accountId/exports/': typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
   '/_app/installations_/$installationId/accounts_/$accountId/imports/': typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   '/_app/installations_/$installationId/accounts_/$accountId/info/': typeof AppInstallationsInstallationIdAccountsAccountIdInfoIndexLazyRoute
@@ -238,6 +257,7 @@ export interface FileRouteTypes {
     | '/installations/$installationId/accounts/'
     | '/installations/$installationId/cluster-state/'
     | '/installations/$installationId/limits/'
+    | '/installations/$installationId/accounts/$accountId/api-tokens/'
     | '/installations/$installationId/accounts/$accountId/exports/'
     | '/installations/$installationId/accounts/$accountId/imports/'
     | '/installations/$installationId/accounts/$accountId/info/'
@@ -253,6 +273,7 @@ export interface FileRouteTypes {
     | '/installations/$installationId/accounts'
     | '/installations/$installationId/cluster-state'
     | '/installations/$installationId/limits'
+    | '/installations/$installationId/accounts/$accountId/api-tokens'
     | '/installations/$installationId/accounts/$accountId/exports'
     | '/installations/$installationId/accounts/$accountId/imports'
     | '/installations/$installationId/accounts/$accountId/info'
@@ -269,6 +290,7 @@ export interface FileRouteTypes {
     | '/_app/installations_/$installationId/accounts/'
     | '/_app/installations_/$installationId/cluster-state/'
     | '/_app/installations_/$installationId/limits/'
+    | '/_app/installations_/$installationId/accounts_/$accountId/api-tokens/'
     | '/_app/installations_/$installationId/accounts_/$accountId/exports/'
     | '/_app/installations_/$installationId/accounts_/$accountId/imports/'
     | '/_app/installations_/$installationId/accounts_/$accountId/info/'
@@ -382,6 +404,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/installations_/$installationId/accounts_/$accountId/api-tokens/': {
+      id: '/_app/installations_/$installationId/accounts_/$accountId/api-tokens/'
+      path: '/installations/$installationId/accounts/$accountId/api-tokens'
+      fullPath: '/installations/$installationId/accounts/$accountId/api-tokens/'
+      preLoaderRoute: typeof AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -392,6 +421,7 @@ interface AppRouteChildren {
   AppInstallationsInstallationIdAccountsIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsIndexLazyRoute
   AppInstallationsInstallationIdClusterStateIndexLazyRoute: typeof AppInstallationsInstallationIdClusterStateIndexLazyRoute
   AppInstallationsInstallationIdLimitsIndexLazyRoute: typeof AppInstallationsInstallationIdLimitsIndexLazyRoute
+  AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute
   AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute
   AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute
   AppInstallationsInstallationIdAccountsAccountIdInfoIndexLazyRoute: typeof AppInstallationsInstallationIdAccountsAccountIdInfoIndexLazyRoute
@@ -410,6 +440,8 @@ const AppRouteChildren: AppRouteChildren = {
     AppInstallationsInstallationIdClusterStateIndexLazyRoute,
   AppInstallationsInstallationIdLimitsIndexLazyRoute:
     AppInstallationsInstallationIdLimitsIndexLazyRoute,
+  AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute:
+    AppInstallationsInstallationIdAccountsAccountIdApiTokensIndexLazyRoute,
   AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute:
     AppInstallationsInstallationIdAccountsAccountIdExportsIndexLazyRoute,
   AppInstallationsInstallationIdAccountsAccountIdImportsIndexLazyRoute:

@@ -2,6 +2,7 @@ package restapi
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -11,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/nats-tower/nats-tower/interfaces/restapi/utils"
 	"github.com/nats-tower/nats-tower/natsauth"
 )
 
@@ -20,6 +22,34 @@ type buildInfoAPI struct {
 		Key   string `json:"key"`
 		Value string `json:"value"`
 	} `json:"settings"`
+}
+
+// apiTokenRequestKey is the request store key under which a validated API
+// token record is kept so inner route middlewares can reuse it.
+const apiTokenRequestKey = "natsTowerAPIToken"
+
+// bearerTokenFromRequest extracts the bearer token from the Authorization
+// header. The "Bearer" prefix is optional, mirroring PocketBase behavior.
+func bearerTokenFromRequest(e *core.RequestEvent) string {
+	token := e.Request.Header.Get("Authorization")
+	if len(token) > 7 && strings.EqualFold(token[:7], "Bearer ") {
+		return token[7:]
+	}
+	return token
+}
+
+// authenticateAPIToken validates the bearer token of the request against the
+// nats_auth_api_tokens collection. It returns the matching token record on
+// success. Invalid, expired or missing tokens yield an error that is either
+// natsauth.ErrAPITokenNotFound or natsauth.ErrAPITokenExpired.
+func authenticateAPIToken(e *core.RequestEvent) (*core.Record, error) {
+	tokenValue := bearerTokenFromRequest(e)
+	if tokenValue == "" {
+		return nil, natsauth.ErrAPITokenNotFound
+	}
+
+	natsauthModule := utils.MustGetNATSAuth(e)
+	return natsauthModule.AuthenticateAPIToken(e.Request.Context(), tokenValue)
 }
 
 func RegisterAPIRoutes(ctx context.Context,
@@ -54,7 +84,6 @@ func RegisterAPIRoutes(ctx context.Context,
 
 		return recordMiddleware(e)
 	})
-
 	e.Router.GET("/metrics",
 		func(e *core.RequestEvent) error {
 			promhttp.HandlerFor(
@@ -103,6 +132,33 @@ func RegisterAPIRoutes(ctx context.Context,
 			return e.Error(http.StatusInternalServerError, "Failed to check access: ", err)
 		}
 		if !ok {
+			// The request is not authorized by a PocketBase auth record.
+			// Try to authorize it with an API token that is bound to an
+			// account of this installation.
+			if e.Auth == nil && bearerTokenFromRequest(e) != "" {
+				tokenRecord, tokenErr := authenticateAPIToken(e)
+				if tokenErr != nil {
+					if errors.Is(tokenErr, natsauth.ErrAPITokenNotFound) || errors.Is(tokenErr, natsauth.ErrAPITokenExpired) {
+						return e.Error(http.StatusUnauthorized, "Invalid or expired API token", nil)
+					}
+					return e.Error(http.StatusInternalServerError, "Failed to validate API token: ", tokenErr)
+				}
+
+				accountRecord, accErr := e.App.FindRecordById("nats_auth_accounts", tokenRecord.GetString("account"))
+				if accErr != nil || accountRecord.GetString("operator") != e.Request.PathValue("installation_id") {
+					return e.Error(http.StatusForbidden, "API token is not valid for this installation", nil)
+				}
+
+				// API tokens only grant access to the account scoped API,
+				// not to installation level endpoints.
+				if !strings.Contains(e.Request.URL.Path, "/accounts/") {
+					return e.Error(http.StatusForbidden, "API tokens only grant access to account scoped routes", nil)
+				}
+
+				e.Set(apiTokenRequestKey, tokenRecord)
+				return e.Next()
+			}
+
 			return e.Error(http.StatusForbidden, "You do not have access to this installation", nil)
 		}
 		return e.Next()
@@ -141,10 +197,28 @@ func RegisterAPIRoutes(ctx context.Context,
 			return e.Error(http.StatusInternalServerError, "Failed to check access: ", err)
 		}
 		if !ok {
+			// The request is not authorized by a PocketBase auth record.
+			// It may have been authorized by an API token in the
+			// installation group middleware; the token must then be
+			// scoped to this account.
+			if tokenRecord, isToken := e.Get(apiTokenRequestKey).(*core.Record); isToken {
+				if tokenRecord.GetString("account") == e.Request.PathValue("account_id") {
+					return e.Next()
+				}
+				return e.Error(http.StatusForbidden, "API token is not scoped to this account", nil)
+			}
+
 			return e.Error(http.StatusForbidden, "You do not have access to this account", nil)
 		}
 		return e.Next()
 	})
+
+	accountGroup.POST("/users/shortlived",
+		func(e *core.RequestEvent) error {
+			installationID := e.Request.PathValue("installation_id")
+			accountID := e.Request.PathValue("account_id")
+			return GenerateShortLivedUser(e, installationID, accountID)
+		}).BindFunc(metricsMiddleware.WrapHandler("/api/nats-tower/installations/:installation_id/accounts/:account_id/users/shortlived"))
 
 	accountGroup.GET("/streams",
 		func(e *core.RequestEvent) error {

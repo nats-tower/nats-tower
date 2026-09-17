@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { NATS_URL } from "../config";
+import { NATS_URL, TOWER_BASE_URL } from "../config";
 import {
 	natsAccountInfo,
 	natsPub,
@@ -12,6 +12,7 @@ import { startNatsServer, stopNatsServer } from "../helpers/nats-server";
 import { attachText, shot } from "../helpers/screenshot";
 import {
 	createAccount,
+	createAPIToken,
 	createInstallation,
 	createLimit,
 	createRole,
@@ -230,6 +231,100 @@ test.describe.serial("NATS Tower major features", () => {
 		await attachText(
 			"nats pub after deletion (rejected)",
 			`before delete => ${before.output || "OK"}\n\nafter delete => ${revokedOutput}`,
+		);
+	});
+
+	test("6) create an API token, generate shortlived scoped user credentials via the API", async ({
+		page,
+	}) => {
+		await login(page);
+
+		const accountId = await createAccount(page, installationId, {
+			name: "acc-apid",
+			description: "account for api token e2e",
+		});
+
+		// Admin creates an API token scoped to the account from the UI.
+		const token = await createAPIToken(page, installationId, accountId, {
+			name: "e2e-automation",
+			description: "e2e api token",
+		});
+		expect(token).toMatch(/^nt_/);
+		await shot(page, "6-api-token-created");
+
+		// Automations call the account API with the API token (no user auth).
+		const res = await fetch(
+			`${TOWER_BASE_URL}/api/nats-tower/installations/${installationId}/accounts/${accountId}/users/shortlived`,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
+					name: "shortlived-e2e",
+					publish: ["allowed.>"],
+					subscribe: ["allowed.>"],
+					expires_in: 300,
+				}),
+			},
+		);
+		const text = await res.text();
+		expect(res.status, text).toBe(200);
+		const body = JSON.parse(text) as {
+			public_key: string;
+			seed: string;
+			jwt: string;
+			creds: string;
+			expires_at: string;
+		};
+		expect(body.public_key).toMatch(/^U/);
+		expect(body.seed).toMatch(/^S/);
+		expect(body.creds).toContain("BEGIN NATS USER JWT");
+
+		// The generated creds must authenticate against the real server and
+		// honor the scoped permissions.
+		const credsFile = writeCreds("acc-apid-shortlived", body.creds);
+
+		// Allowed subject: publish succeeds.
+		const allowed = natsPub(credsFile, "allowed.test", "hi");
+		expect(allowed.code, allowed.output).toBe(0);
+
+		// Denied subject: server rejects with a permissions violation.
+		const denied = natsPub(credsFile, "denied.test", "hi");
+		expect(
+			denied.code !== 0 || /Permissions Violation/i.test(denied.output),
+			denied.output,
+		).toBeTruthy();
+
+		// The same request without the API token must be forbidden.
+		const unauth = await fetch(
+			`${TOWER_BASE_URL}/api/nats-tower/installations/${installationId}/accounts/${accountId}/users/shortlived`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: "no-token" }),
+			},
+		);
+		expect(unauth.status).toBe(403);
+
+		// A garbage token must be rejected as invalid.
+		const bad = await fetch(
+			`${TOWER_BASE_URL}/api/nats-tower/installations/${installationId}/accounts/${accountId}/users/shortlived`,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: "Bearer nt_invalid",
+				},
+				body: JSON.stringify({ name: "bad-token" }),
+			},
+		);
+		expect(bad.status).toBe(401);
+
+		await attachText(
+			"nats pub allowed vs denied (shortlived)",
+			`allowed.test => ${allowed.output || "OK"}\n\ndenied.test => ${denied.output}`,
 		);
 	});
 });
