@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	validation "github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/go-ozzo/ozzo-validation/v4/is"
+	validation "github.com/pocketbase/ozzo-validation/v4"
+	"github.com/pocketbase/ozzo-validation/v4/is"
 	"github.com/pocketbase/pocketbase/core/validators"
 	"github.com/pocketbase/pocketbase/tools/cron"
 	"github.com/pocketbase/pocketbase/tools/hook"
@@ -259,6 +259,7 @@ func (s *Settings) DBExport(app App) (map[string]any, error) {
 
 	// @todo remove with encoding/json/2
 	// serialize as empty array
+	//nolint:staticcheck
 	if s.settings.SuperuserIPs == nil {
 		s.settings.SuperuserIPs = []string{}
 	}

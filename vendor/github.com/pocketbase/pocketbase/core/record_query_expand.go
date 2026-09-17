@@ -175,7 +175,7 @@ func (app *BaseApp) expandRecords(records []*Record, expandPath string, fetchFun
 			}
 		}
 	}
-	existsSet = nil
+	existsSet = nil //nolint:ineffassign
 
 	// fetch rels
 	rels, relsErr := fetchFunc(relCollection, relIds)

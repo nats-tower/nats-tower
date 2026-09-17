@@ -925,8 +925,14 @@ func onCollectionSaveExecute(e *CollectionEvent) error {
 	}
 
 	// trigger an update for all views with changed fields as a result of the current collection save
-	// (ignoring view errors to allow users to update the query from the UI)
-	resaveViewsWithChangedFields(e.App, e.Collection.Id)
+	// (only log the error to allow users to adjust the problematic view queries from the UI)
+	depViewsErr := resaveViewsWithChangedFields(e.App, e.Collection.Id)
+	if depViewsErr != nil {
+		e.App.Logger().Warn(
+			"Dependent view collection(s) may need to be updated after "+e.Collection.Name+" collection change",
+			"error", depViewsErr,
+		)
+	}
 
 	return nil
 }

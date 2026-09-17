@@ -2,6 +2,20 @@
 > For the most recent versions, please refer to [CHANGELOG.md](./CHANGELOG.md)
 ---
 
+## v0.22.48
+
+- (_Backported from v0.39.7_) Replaced `github.com/go-ozzo/ozzo-validation` with the fork `github.com/pocketbase/ozzo-validation` since the original library has recently changed ownership and the new maintainer cannot be trusted.
+
+- (_Backported from v0.39.7_) Fixed View collection `*` validator and added more friendly error messages ([#7761](https://github.com/pocketbase/pocketbase/issues/7761)).
+
+- (_Backported from v0.39.7_) ⚠️ Security fix for unhandled panic in internal worker goroutines ([#7762](https://github.com/pocketbase/pocketbase/discussions/7762)).
+
+
+## v0.22.47
+
+- (_Backported from v0.39.6_) Bumped the min Go GitHub action version to 1.26.5 as it includes some [minor security fixes](https://github.com/golang/go/issues?q=milestone%3AGo1.26.5).
+
+
 ## v0.22.46
 
 - (_Backported from v0.39.1_) Bumped the min Go GitHub action version to 1.26.4 as it includes some [minor security fixes](https://github.com/golang/go/issues?q=milestone%3AGo1.26.4).
