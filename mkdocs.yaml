@@ -8,6 +8,7 @@ nav:
   - 'Getting started': 'getting_started/index.md'
   - 'Concept': 'concept/index.md'
   - 'User Roles': 'user_roles/index.md'
+  - 'API Tokens': 'api_tokens/index.md'
   - 'Admin documentation':
     - 'Installation': 'admin_doc/installation/index.md'
     - 'Configuration': 'admin_doc/configuration/index.md'

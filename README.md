@@ -52,6 +52,7 @@ Each application can get its own account and you can manage the resources, strea
 - User management
 - Permission management
 - Resource management
+- API tokens for automations (incl. shortlived, subject scoped user credentials)
 - Web based UI
 - [k8s operator](https://github.com/nats-tower/nats-tower-operator) to automatically inject credentials into workloads
 

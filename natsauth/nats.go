@@ -35,6 +35,7 @@ type NATSAuthModule struct {
 	NATSUserCollection           *core.Collection
 	NATSLimitsCollection         *core.Collection
 	NATSSigningKeysCollection    *core.Collection
+	NATSAPITokensCollection      *core.Collection
 
 	pendingLock sync.Mutex
 }
@@ -138,6 +139,19 @@ func CreateNATSAuthModule(ctx context.Context,
 				if err := t.syncSigningKeyScopeToAccount(ctx, e.App, record); err != nil {
 					return err
 				}
+			}
+		}
+		if e.Record.TableName() == APITokensCollectionName {
+			record := e.Record
+			if record.GetString("token") == "" {
+				logger.InfoContext(ctx, "Creating nats api token...",
+					slog.String("name", record.GetString("name")))
+
+				tokenValue, err := generateAPITokenValue()
+				if err != nil {
+					return err
+				}
+				record.Set("token", tokenValue)
 			}
 		}
 		if e.Record.TableName() == "nats_auth_users" {

@@ -219,6 +219,54 @@ export async function createRole(
 	await expect(dialog).toBeHidden();
 }
 
+/**
+ * Create an API token via the UI and return the generated token value.
+ * The token is read from the "API token created" dialog that appears after
+ * the create dialog closes.
+ */
+export async function createAPIToken(
+	page: Page,
+	installationId: string,
+	accountId: string,
+	opts: { name: string; description?: string },
+): Promise<string> {
+	await gotoAPITokens(page, installationId, accountId);
+	await page.getByRole("button", { name: "Add Token" }).click();
+
+	const dialog = page.getByRole("dialog");
+	await dialog.locator("#token-name").fill(opts.name);
+	if (opts.description) {
+		await dialog.locator("#token-description").fill(opts.description);
+	}
+	await dialog.getByRole("button", { name: "Create Token" }).click();
+
+	// The token reveal dialog opens as soon as the create dialog closes,
+	// so wait for it directly instead of asserting on the shared locator.
+	const reveal = page
+		.getByRole("dialog")
+		.filter({ hasText: "API token created" });
+	await reveal.waitFor({ state: "visible" });
+	const token = await reveal.locator("#api-token-value").inputValue();
+	await page.keyboard.press("Escape");
+	await expect(reveal).toBeHidden();
+
+	return token;
+}
+
+/** Navigate to the API tokens page of an account. */
+export async function gotoAPITokens(
+	page: Page,
+	installationId: string,
+	accountId: string,
+) {
+	await page.goto(
+		`/installations/${installationId}/accounts/${accountId}/api-tokens`,
+	);
+	await page
+		.getByRole("heading", { name: "API Tokens" })
+		.waitFor({ state: "visible" });
+}
+
 /** Delete a user via the row actions popover (accepts the confirm dialog). */
 export async function deleteUser(
 	page: Page,

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 import {
+	PULL_TOWER_IMAGE,
 	TOWER_BASE_URL,
 	TOWER_CONTAINER_NAME,
 	TOWER_HTTP_PORT,
@@ -50,11 +51,14 @@ async function waitForReady(timeoutMs = 60_000) {
 }
 
 /**
- * Pull the prebuilt Tower image and start it with host networking so it can both
- * serve the UI on localhost:8099 and reach the nats-server on localhost:4222.
+ * Optionally pull the Tower image and start it with host networking so it can
+ * both serve the UI on localhost:8099 and reach the nats-server on
+ * localhost:4222. Locally built images (TOWER_IMAGE env) are not pulled.
  */
 export async function startTowerContainer() {
-	docker(["pull", TOWER_IMAGE]);
+	if (PULL_TOWER_IMAGE) {
+		docker(["pull", TOWER_IMAGE]);
+	}
 	removeExisting();
 	docker([
 		"run",

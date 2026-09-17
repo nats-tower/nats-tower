@@ -58,6 +58,39 @@ sets per account and assign them to NATS users. Implementation details:
   role assignment happens in the users page and is rendered by
   `frontend/src/components/ui/users/user-columns.tsx`.
 
+### API Tokens
+
+API tokens let automations call the account scoped NATS Tower API without
+interactive user logins. Implementation details:
+
+- A token is stored as a record in the `nats_auth_api_tokens` collection,
+  scoped to an account (fields: `name`, `description`, `account`, `token`,
+  `expires_at`, plus autodate `created`). The random `nt_`-prefixed token
+  value is generated on create (`natsauth/api_tokens.go`, hooked from
+  `OnRecordCreate` in `natsauth/nats.go`). Token names are unique per
+  account (unique index on `name, account`).
+- The collection rules are superuser-only (`@request.auth.collectionName`),
+  i.e. only admins can create/manage tokens. Frontend page:
+  `frontend/src/pages/_app/.../accounts_/$accountId/api-tokens/index.lazy.tsx`
+  (reachable from the account table's ⋮ menu, gated on
+  `pb.authStore.isSuperuser`).
+- Requests without a PocketBase auth record can present the token as
+  `Authorization: Bearer <token>`. The installation/account route group
+  middlewares in `interfaces/restapi/routes.go` validate it via
+  `NATSAuthModule.AuthenticateAPIToken` and restrict it to the account scoped
+  routes of its own account (installation level endpoints stay user-auth
+  only). Invalid/expired tokens yield `401`, scope mismatches `403`.
+- First supported API: `POST /api/nats-tower/installations/{installation_id}/accounts/{account_id}/users/shortlived`
+  (`interfaces/restapi/api_token_handler.go`) generates ephemeral, subject
+  scoped user credentials (JWT + nkey seed + formatted creds) with an
+  explicit expiration (default 1 h, max 24 h). The users are **not**
+  persisted and need no account JWT changes (signed with the account's main
+  signing key). See `docs/api_tokens/index.md`.
+- E2E: `integration_tests` scenario 6 covers UI token creation, the
+  shortlived endpoint and scoped pub/sub against a real nats-server. The
+  suite image is overridable via the `TOWER_IMAGE` env (locally built images
+  are not pulled).
+
 ## Technology Stack Summary
 
 -   **Backend:** Go 1.24+ with Pocketbase v0.28.1

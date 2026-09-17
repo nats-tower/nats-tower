@@ -18,6 +18,11 @@ container, talks to a real `nats-server`, and verifies the result with the
    user may publish to allowed subjects but is rejected on denied ones.
 5. **Removing user access** – delete a user and verify the revoked credentials
    can no longer connect.
+6. **API tokens** – create an account scoped API token from the UI, use it to
+   generate shortlived subject scoped user credentials via the account API,
+   and verify the generated credentials against the server (allowed subject
+   publishes, denied subject is rejected); also verify that missing/invalid
+   tokens are rejected.
 
 ## Prerequisites
 

@@ -13,6 +13,7 @@ export enum Collections {
 	Superusers = "_superusers",
 	NatsAuthAccounts = "nats_auth_accounts",
 	NatsAuthAccountsPending = "nats_auth_accounts_pending",
+	NatsAuthAPITokens = "nats_auth_api_tokens",
 	NatsAuthK8sAccess = "nats_auth_k8s_access",
 	NatsAuthLimits = "nats_auth_limits",
 	NatsAuthOperators = "nats_auth_operators",
@@ -120,6 +121,16 @@ export type NatsAuthAccountsPendingRecord = {
 	message?: string;
 };
 
+export type NatsAuthAPITokensRecord = {
+	account: RecordIdString;
+	created?: IsoDateString;
+	description?: string;
+	expires_at?: string;
+	id: string;
+	name: string;
+	token?: string;
+};
+
 export type NatsAuthK8sAccessRecord = {
 	account: RecordIdString;
 	cluster: string;
@@ -219,6 +230,8 @@ export type NatsAuthAccountsResponse<Texpand = unknown> =
 	Required<NatsAuthAccountsRecord> & BaseSystemFields<Texpand>;
 export type NatsAuthAccountsPendingResponse<Texpand = unknown> =
 	Required<NatsAuthAccountsPendingRecord> & BaseSystemFields<Texpand>;
+export type NatsAuthAPITokensResponse<Texpand = unknown> =
+	Required<NatsAuthAPITokensRecord> & BaseSystemFields<Texpand>;
 export type NatsAuthK8sAccessResponse<Texpand = unknown> =
 	Required<NatsAuthK8sAccessRecord> & BaseSystemFields<Texpand>;
 export type NatsAuthLimitsResponse<Texpand = unknown> =
@@ -246,6 +259,7 @@ export type CollectionRecords = {
 	_superusers: SuperusersRecord;
 	nats_auth_accounts: NatsAuthAccountsRecord;
 	nats_auth_accounts_pending: NatsAuthAccountsPendingRecord;
+	nats_auth_api_tokens: NatsAuthAPITokensRecord;
 	nats_auth_k8s_access: NatsAuthK8sAccessRecord;
 	nats_auth_limits: NatsAuthLimitsRecord;
 	nats_auth_operators: NatsAuthOperatorsRecord;
@@ -263,6 +277,7 @@ export type CollectionResponses = {
 	_superusers: SuperusersResponse;
 	nats_auth_accounts: NatsAuthAccountsResponse;
 	nats_auth_accounts_pending: NatsAuthAccountsPendingResponse;
+	nats_auth_api_tokens: NatsAuthAPITokensResponse;
 	nats_auth_k8s_access: NatsAuthK8sAccessResponse;
 	nats_auth_limits: NatsAuthLimitsResponse;
 	nats_auth_operators: NatsAuthOperatorsResponse;
@@ -287,6 +302,9 @@ export type TypedPocketBase = PocketBase & {
 	collection(
 		idOrName: "nats_auth_accounts_pending",
 	): RecordService<NatsAuthAccountsPendingResponse>;
+	collection(
+		idOrName: "nats_auth_api_tokens",
+	): RecordService<NatsAuthAPITokensResponse>;
 	collection(
 		idOrName: "nats_auth_k8s_access",
 	): RecordService<NatsAuthK8sAccessResponse>;

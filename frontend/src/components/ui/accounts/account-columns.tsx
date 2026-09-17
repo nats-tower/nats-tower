@@ -4,7 +4,7 @@ import type {
 	NatsAuthAccountsPendingRecord,
 	TeamsRecord,
 } from "@/lib/pocketbase-types";
-import { BoxesIcon, Check, ClockArrowUp, ImportIcon, TrashIcon, UploadIcon } from "lucide-react";
+import { BoxesIcon, Check, ClockArrowUp, ImportIcon, KeyRound, TrashIcon, UploadIcon } from "lucide-react";
 import {
 	QuestionMarkIcon,
 	InfoCircledIcon,
@@ -244,6 +244,19 @@ export function getAccountsColumns(
 										>
 											<BoxesIcon className="mr-1" /> Manage Kubernetes Access
 										</Button>
+										{pb.authStore.isSuperuser ? (
+											<Button
+												variant="ghost"
+												className="w-full flex items-center justify-start"
+												onClick={async () => {
+													navigate({
+														to: `/installations/${installationId}/accounts/${account.id}/api-tokens`,
+													});
+												}}
+											>
+												<KeyRound className="mr-1" /> Manage API Tokens
+											</Button>
+										) : undefined}
 										{pb.authStore.isSuperuser ? (
 											<Button
 												variant="ghost"
