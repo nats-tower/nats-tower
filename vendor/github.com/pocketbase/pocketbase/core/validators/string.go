@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"regexp"
 
-	validation "github.com/go-ozzo/ozzo-validation/v4"
+	validation "github.com/pocketbase/ozzo-validation/v4"
 )
 
 // IsRegex checks whether the validated value is a valid regular expression pattern.

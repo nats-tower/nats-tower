@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"slices"
 
-	validation "github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/go-ozzo/ozzo-validation/v4/is"
+	validation "github.com/pocketbase/ozzo-validation/v4"
+	"github.com/pocketbase/ozzo-validation/v4/is"
 	"github.com/pocketbase/pocketbase/core/validators"
 	"github.com/spf13/cast"
 )

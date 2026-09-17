@@ -14,10 +14,11 @@ import (
 	"strings"
 	"time"
 
-	validation "github.com/go-ozzo/ozzo-validation/v4"
+	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"github.com/pocketbase/pocketbase/tools/routine"
 	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cast"
 )
@@ -195,7 +196,7 @@ func (p *batchProcessor) Process(batch []*core.InternalRequest, timeout time.Dur
 			p.stopCh <- struct{}{}
 		}()
 
-		go func() {
+		routine.FireAndForget(func() {
 			err := p.process(txApp, batch, 0)
 
 			if err != nil {
@@ -216,7 +217,7 @@ func (p *batchProcessor) Process(batch []*core.InternalRequest, timeout time.Dur
 			}
 
 			p.errCh <- err
-		}()
+		})
 
 		select {
 		case responseErr := <-p.errCh:
