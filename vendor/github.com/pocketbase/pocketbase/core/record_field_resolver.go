@@ -241,6 +241,7 @@ func (r *RecordFieldResolver) updateQueryWithDeduplicateConstraint(query *dbx.Se
 	// }
 }
 
+//nolint:unused
 func preferGroupBy(info *dbx.QueryInfo, fullUnquotedGroupByCol string) bool {
 	if len(info.GroupBy) != 0 {
 		return false

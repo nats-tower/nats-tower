@@ -1,11 +1,44 @@
+## v0.39.7
+
+- Replaced `github.com/go-ozzo/ozzo-validation` with the fork `github.com/pocketbase/ozzo-validation` since the original library has recently changed ownership and the new maintainer cannot be trusted.
+  _There are plans to create eventually a new validation library from scratch more suited for our needs in PocketBase because ozzo-validation is known to have some minor performance and obscure regex issues, but until then we'll stick with the fork (and if you use `ozzo-validation` in your own Go code, I'd suggest to swap the imports with the fork)_.
+
+- Fixed missing import collection `fields` property access ([#7760](https://github.com/pocketbase/pocketbase/issues/7760)).
+
+- Fixed View collection `*` validator and added more friendly error messages ([#7761](https://github.com/pocketbase/pocketbase/issues/7761)).
+
+- ⚠️ Security fix for unhandled panic in internal worker goroutines ([#7762](https://github.com/pocketbase/pocketbase/discussions/7762)).
+    _To prevent this from showing again, all existing internal worker functions were wrapped with [`routine.SafeWrap(f)`](https://pkg.go.dev/github.com/pocketbase/pocketbase/tools/routine#SafeWrap) (auto recovers and returns any eventual panic as regular error)._
+
+
+## v0.39.6
+
+- Added `Cc` and `Bcc` recipients to the dev `sendmail` command for consistency with the SMTP mailer.
+
+- Added extra hardening options to the Microsoft OAuth2 provider allowing developers to specify the preferred safe email extraction method.
+
+- Updated goja and the related `golang.org/x/*` dependencies _(`WeakMap` regression fixes)_.
+
+- Bumped the min Go GitHub action version to 1.26.5 as it includes some [minor security fixes](https://github.com/golang/go/issues?q=milestone%3AGo1.26.5).
+
+
+## v0.39.5
+
+- Limit with ellipsis long `url` field values.
+
+- Readded the "fullscreen" `editor` field option and preloaded the TinyMCE component for slightly faster initial rendering ([#7746](https://github.com/pocketbase/pocketbase/issues/7746)).
+
+- Updated goja (`TypedArray` fixes).
+
+
 ## v0.39.4
 
 - Removed `redirectURL` required validator from the code->token exchange endpoint (aka. `authWithOAuth2Code()`) ([#7734](https://github.com/pocketbase/pocketbase/issues/7734)).
-    _Note that the OAuth2 provider has their own validations and whether it is allowed to be empty or not could depend on the configured OAuth2 app (in most cases it is required and the redirect address must match with the initial value submitted with the authorization request)._
+    _Note that OAuth2 providers have their own validations and whether it is allowed to be empty or not could depend on the configured OAuth2 app (in most cases it is required and the redirect address must match with the initial value submitted with the authorization request)._
 
 - Enabled sorting by the first _implicit_ presentable relation field ([#7735](https://github.com/pocketbase/pocketbase/discussions/7735)).
 
-- Other minor UI fixes (tooltip clear on hovered element removal, sortable optional before element fix, etc.).
+- Other minor UI fixes (tooltip clear on hovered element removal, optional before element sortable fix, etc.).
 
 - Updated goja and the related `golang.org/x/*` dependencies (regex support improvements).
 

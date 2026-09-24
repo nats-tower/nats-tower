@@ -250,52 +250,6 @@ func (app *BaseApp) TruncateCollection(collection *Collection) error {
 
 // -------------------------------------------------------------------
 
-// saveViewCollection persists the provided View collection changes:
-//   - deletes the old related SQL view (if any)
-//   - creates a new SQL view with the latest newCollection.Options.Query
-//   - generates new feilds list  based on newCollection.Options.Query
-//   - updates newCollection.Fields based on the generated view table info and query
-//   - saves the newCollection
-//
-// This method returns an error if newCollection is not a "view".
-func saveViewCollection(app App, newCollection, oldCollection *Collection) error {
-	if !newCollection.IsView() {
-		return errors.New("not a view collection")
-	}
-
-	return app.RunInTransaction(func(txApp App) error {
-		query := newCollection.ViewQuery
-
-		// generate collection fields from the query
-		viewFields, err := txApp.CreateViewFields(query)
-		if err != nil {
-			return err
-		}
-
-		// delete old renamed view
-		if oldCollection != nil {
-			if err := txApp.DeleteView(oldCollection.Name); err != nil {
-				return err
-			}
-		}
-
-		// wrap view query if necessary
-		query, err = normalizeViewQueryId(txApp, query)
-		if err != nil {
-			return fmt.Errorf("failed to normalize view query id: %w", err)
-		}
-
-		// (re)create the view
-		if err := txApp.SaveView(newCollection.Name, query); err != nil {
-			return err
-		}
-
-		newCollection.Fields = viewFields
-
-		return txApp.Save(newCollection)
-	})
-}
-
 // normalizeViewQueryId wraps (if necessary) the provided view query
 // with a subselect to ensure that the id column is a text since
 // currently we don't support non-string model ids
@@ -342,50 +296,59 @@ func resaveViewsWithChangedFields(app App, excludeIds ...string) error {
 	}
 
 	return app.RunInTransaction(func(txApp App) error {
+		var collectionErrors []error
+
 		for _, collection := range collections {
 			if len(excludeIds) > 0 && list.ExistInSlice(collection.Id, excludeIds) {
 				continue
 			}
 
-			// clone the existing fields for temp modifications
-			oldFields, err := collection.Fields.Clone()
-			if err != nil {
-				return err
+			check := func() error {
+				// clone the existing fields for temp modifications
+				oldFields, err := collection.Fields.Clone()
+				if err != nil {
+					return err
+				}
+
+				// generate new fields from the query
+				newFields, err := txApp.CreateViewFields(collection.ViewQuery)
+				if err != nil {
+					return err
+				}
+
+				// unset the fields' ids to exclude from the comparison
+				for _, f := range oldFields {
+					f.SetId("")
+				}
+				for _, f := range newFields {
+					f.SetId("")
+				}
+
+				encodedNewFields, err := json.Marshal(newFields)
+				if err != nil {
+					return err
+				}
+
+				encodedOldFields, err := json.Marshal(oldFields)
+				if err != nil {
+					return err
+				}
+
+				if bytes.EqualFold(encodedNewFields, encodedOldFields) {
+					return nil // no changes
+				}
+
+				return txApp.Save(collection)
 			}
 
-			// generate new fields from the query
-			newFields, err := txApp.CreateViewFields(collection.ViewQuery)
-			if err != nil {
-				return err
-			}
-
-			// unset the fields' ids to exclude from the comparison
-			for _, f := range oldFields {
-				f.SetId("")
-			}
-			for _, f := range newFields {
-				f.SetId("")
-			}
-
-			encodedNewFields, err := json.Marshal(newFields)
-			if err != nil {
-				return err
-			}
-
-			encodedOldFields, err := json.Marshal(oldFields)
-			if err != nil {
-				return err
-			}
-
-			if bytes.EqualFold(encodedNewFields, encodedOldFields) {
-				continue // no changes
-			}
-
-			if err := saveViewCollection(txApp, collection, nil); err != nil {
-				return err
+			if err := check(); err != nil {
+				collectionErrors = append(
+					collectionErrors,
+					fmt.Errorf("[%s] %w", collection.Name, err),
+				)
 			}
 		}
 
-		return nil
+		return errors.Join(collectionErrors...)
 	})
 }

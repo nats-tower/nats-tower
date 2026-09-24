@@ -10,6 +10,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/fsnotify/fsnotify"
 	"github.com/pocketbase/pocketbase/tools/hook"
+	"github.com/pocketbase/pocketbase/tools/routine"
 	"github.com/pocketbase/pocketbase/tools/security"
 )
 
@@ -152,7 +153,7 @@ func createNotifyDirWatcher(app App, instanceId string, localNotifyDirPath strin
 	}
 
 	// watch
-	go func() {
+	routine.FireAndForget(func() {
 		defer stopDebounceTimer()
 
 		for {
@@ -204,7 +205,7 @@ func createNotifyDirWatcher(app App, instanceId string, localNotifyDirPath strin
 				}
 			}
 		}
-	}()
+	})
 
 	return watcher, err
 }

@@ -159,6 +159,12 @@ func (app *BaseApp) DryRunView(dangerousSelectQuery string, sampleSize int) (*Dr
 		}
 	}
 
+	// apply the same normalization as in the collection view query
+	dangerousSelectQuery, err = normalizeViewQueryId(app, dangerousSelectQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to normalize view query id: %w", err)
+	}
+
 	records := []*Record{}
 
 	err = app.RecordQuery(tempCollection).
@@ -337,6 +343,12 @@ func parseQueryToFields(app App, selectQuery string) (map[string]*queryField, er
 	}
 
 	for _, col := range p.columns {
+		// note: it should be safe to use the already parsed alias as there
+		// is no valid SQL where * column can be aliased to something else
+		if col.alias == "*" {
+			return nil, errors.New("wildcard columns (*) are not supported - manually type the collection field names you want the view query to have")
+		}
+
 		colLower := strings.ToLower(col.original)
 
 		// pk (always assume text field for now)
@@ -422,10 +434,6 @@ func parseQueryToFields(app App, selectQuery string) (map[string]*queryField, er
 				field: defaultViewField(col.alias),
 			}
 			continue
-		}
-
-		if fieldName == "*" {
-			return nil, errors.New("dynamic column names are not supported")
 		}
 
 		// find the first field by name (case insensitive)

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/pocketbase/dbx"
+	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
 	"github.com/pocketbase/pocketbase/tools/picker"
@@ -260,7 +260,7 @@ func realtimeUpdateClientsAuth(app core.App, authRecord *core.Record) error {
 	group := new(errgroup.Group)
 
 	for _, chunk := range chunks {
-		group.Go(func() error {
+		group.Go(routine.SafeWrap(func() error {
 			for _, client := range chunk {
 				clientAuth, _ := client.Get(RealtimeClientAuthKey).(*core.Record)
 				if clientAuth != nil &&
@@ -275,7 +275,7 @@ func realtimeUpdateClientsAuth(app core.App, authRecord *core.Record) error {
 			}
 
 			return nil
-		})
+		}))
 	}
 
 	return group.Wait()
@@ -288,7 +288,7 @@ func realtimeUnsetClientsAuthByRecordModelOrProxy(app core.App, authModel core.M
 	group := new(errgroup.Group)
 
 	for _, chunk := range chunks {
-		group.Go(func() error {
+		group.Go(routine.SafeWrap(func() error {
 			for _, client := range chunk {
 				clientAuth, _ := client.Get(RealtimeClientAuthKey).(*core.Record)
 				if clientAuth != nil &&
@@ -299,7 +299,7 @@ func realtimeUnsetClientsAuthByRecordModelOrProxy(app core.App, authModel core.M
 			}
 
 			return nil
-		})
+		}))
 	}
 
 	return group.Wait()
@@ -312,7 +312,7 @@ func realtimeUnsetClientsAuthByCollection(app core.App, collection *core.Collect
 	group := new(errgroup.Group)
 
 	for _, chunk := range chunks {
-		group.Go(func() error {
+		group.Go(routine.SafeWrap(func() error {
 			for _, client := range chunk {
 				clientAuth, _ := client.Get(RealtimeClientAuthKey).(*core.Record)
 				if clientAuth != nil && clientAuth.Collection().Name == collection.Name {
@@ -321,7 +321,7 @@ func realtimeUnsetClientsAuthByCollection(app core.App, collection *core.Collect
 			}
 
 			return nil
-		})
+		}))
 	}
 
 	return group.Wait()
@@ -623,7 +623,7 @@ func realtimeBroadcastRecord(app core.App, action string, record *core.Record, d
 	}
 
 	for _, chunk := range chunks {
-		group.Go(func() error {
+		group.Go(routine.SafeWrap(func() error {
 			var clientAuth *core.Record
 
 			for _, client := range chunk {
@@ -766,7 +766,7 @@ func realtimeBroadcastRecord(app core.App, action string, record *core.Record, d
 			}
 
 			return nil
-		})
+		}))
 	}
 
 	return group.Wait()
@@ -782,7 +782,7 @@ func realtimeBroadcastDryCacheKey(app core.App, key string) error {
 	group := new(errgroup.Group)
 
 	for _, chunk := range chunks {
-		group.Go(func() error {
+		group.Go(routine.SafeWrap(func() error {
 			for _, client := range chunk {
 				messages, ok := client.Get(key).([]subscriptions.Message)
 				if !ok {
@@ -801,7 +801,7 @@ func realtimeBroadcastDryCacheKey(app core.App, key string) error {
 			}
 
 			return nil
-		})
+		}))
 	}
 
 	return group.Wait()
@@ -817,7 +817,7 @@ func realtimeUnsetDryCacheKey(app core.App, key string) error {
 	group := new(errgroup.Group)
 
 	for _, chunk := range chunks {
-		group.Go(func() error {
+		group.Go(routine.SafeWrap(func() error {
 			for _, client := range chunk {
 				if client.Get(key) != nil {
 					client.Unset(key)
@@ -825,7 +825,7 @@ func realtimeUnsetDryCacheKey(app core.App, key string) error {
 			}
 
 			return nil
-		})
+		}))
 	}
 
 	return group.Wait()

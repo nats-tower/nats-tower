@@ -1,9 +1,10 @@
 # ozzo-validation
 
-[![GoDoc](https://godoc.org/github.com/go-ozzo/ozzo-validation?status.png)](http://godoc.org/github.com/go-ozzo/ozzo-validation)
-[![Build Status](https://travis-ci.org/go-ozzo/ozzo-validation.svg?branch=master)](https://travis-ci.org/go-ozzo/ozzo-validation)
-[![Coverage Status](https://coveralls.io/repos/github/go-ozzo/ozzo-validation/badge.svg?branch=master)](https://coveralls.io/github/go-ozzo/ozzo-validation?branch=master)
-[![Go Report](https://goreportcard.com/badge/github.com/go-ozzo/ozzo-validation)](https://goreportcard.com/report/github.com/go-ozzo/ozzo-validation)
+> [!NOTE]
+> This is a fork of [github.com/go-ozzo/ozzo-validation@v4.3.0](https://github.com/go-ozzo/ozzo-validation/tree/v4.3.0) as the original project has changed ownership and the new maintainer cannot be trusted.
+>
+> I do plan to create eventually a new validation library from scratch more suited for our needs in PocketBase since ozzo-validation is known to have some minor performance and obscure regex issues, but until then this fork will have to be used.
+
 
 ## Description
 
@@ -38,7 +39,7 @@ or `validation.ValidateStruct()` to validate the value.
 Run the following command to install the package:
 
 ```
-go get github.com/go-ozzo/ozzo-validation
+go get github.com/pocketbase/ozzo-validation
 ```
 
 ### Validating a Simple Value
@@ -51,8 +52,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/go-ozzo/ozzo-validation/v4/is"
+	"github.com/pocketbase/ozzo-validation/v4"
+	"github.com/pocketbase/ozzo-validation/v4/is"
 )
 
 func main() {
