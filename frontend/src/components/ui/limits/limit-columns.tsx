@@ -1,7 +1,7 @@
 import { pb } from "@/lib/pocketbase";
 import { DotsVerticalIcon, TrashIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy";
 
 import type { NatsAuthLimitsRecord } from "@/lib/pocketbase-types";
 import {

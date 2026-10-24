@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Copy, PlusIcon, Save, ShieldAlert, Trash2Icon } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy";
 import { toast } from "sonner";
 
 export const Route = createLazyFileRoute(

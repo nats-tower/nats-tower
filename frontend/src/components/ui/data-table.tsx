@@ -1,13 +1,12 @@
 import {
-	type ColumnDef,
-	type ColumnFiltersState,
-	useReactTable,
+	type LegacyColumnDef,
+	type LegacyReactTable,
+	useLegacyTable,
 	getCoreRowModel,
 	getPaginationRowModel,
 	getFilteredRowModel,
-	flexRender,
-	type Table as TableInstance,
-} from "@tanstack/react-table";
+} from "@tanstack/react-table/legacy";
+import { flexRender } from "@tanstack/react-table";
 import {
 	ChevronsLeft,
 	ChevronLeft,
@@ -32,23 +31,25 @@ import {
 	SelectValue,
 } from "./select";
 
-interface DataTableProps<TData, TValue> {
-	columns: ColumnDef<TData, TValue>[];
+type ColumnFiltersState = { id: string; value: unknown }[];
+
+interface DataTableProps<TData extends Record<string, any>> {
+	columns: LegacyColumnDef<TData>[];
 	data: TData[];
 	addButton?: ReactElement;
-	filter?: (table: TableInstance<TData>) => ReactElement;
+	filter?: (table: LegacyReactTable<TData>) => ReactElement;
 	noRowsText?: string;
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends Record<string, any>>({
 	columns,
 	data,
 	addButton,
 	noRowsText,
 	filter,
-}: DataTableProps<TData, TValue>) {
+}: DataTableProps<TData>) {
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-	const table = useReactTable({
+	const table = useLegacyTable({
 		data,
 		columns,
 		getCoreRowModel: getCoreRowModel(),
@@ -121,11 +122,11 @@ export function DataTable<TData, TValue>({
 	);
 }
 
-interface DataTablePaginationProps<TData> {
-	table: TableInstance<TData>;
+interface DataTablePaginationProps<TData extends Record<string, any>> {
+	table: LegacyReactTable<TData>;
 }
 
-export function DataTablePagination<TData>({
+export function DataTablePagination<TData extends Record<string, any>>({
 	table,
 }: DataTablePaginationProps<TData>) {
 	return (

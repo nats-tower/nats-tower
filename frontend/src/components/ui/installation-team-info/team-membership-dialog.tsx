@@ -3,7 +3,7 @@ import type { TeamsRecord, UsersRecord } from "@/lib/pocketbase-types";
 import { cn } from "@/lib/utils";
 import { useTeam } from "@/services/teams";
 import { useUsers } from "@/services/users";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy";
 import { ChevronsUpDown, Check, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../button";
