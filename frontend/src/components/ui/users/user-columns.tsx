@@ -1,5 +1,5 @@
 import { pb } from "@/lib/pocketbase";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy";
 import type {
 	NatsAuthAccountsRecord,
 	NatsAuthOperatorsRecord,

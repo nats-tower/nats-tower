@@ -5,7 +5,7 @@ import type {
 	TeamsRecord,
 } from "@/lib/pocketbase-types";
 import { Card, CardContent, CardHeader } from "../card";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy";
 import { DataTable } from "../data-table";
 import { TeamListAddButton } from "./team-list-add-button";
 import { TeamListActions } from "./team-list-actions";

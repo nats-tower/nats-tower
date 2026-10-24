@@ -1,5 +1,5 @@
 import { pb } from "@/lib/pocketbase";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy";
 import type { NatsAuthK8sAccessRecord } from "@/lib/pocketbase-types";
 import { Button } from "@/components/ui/button";
 import { DotsVerticalIcon, TrashIcon } from "@radix-ui/react-icons";
